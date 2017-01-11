@@ -219,7 +219,7 @@ def processLabeling(qgisLayer):
     labelField = qgisLayer.customProperty("labeling/fieldName")
     layer["layout"]["text-field"] = "{%s}" % labelField
     try:
-        size = str(float(qgisLayer.customProperty("labeling/fontSize")) * 2)
+        size = float(qgisLayer.customProperty("labeling/fontSize")) * 2
     except:
         size = 1
     layer["layout"]["text-size"] = size
@@ -236,8 +236,8 @@ def processLabeling(qgisLayer):
         gHalo = str(qgisLayer.customProperty("labeling/bufferColorG"))
         bHalo = str(qgisLayer.customProperty("labeling/bufferColorB"))
         strokeWidth = str(float(qgisLayer.customProperty("labeling/bufferSize")))
-        layer["paint"]["text-halo-color"] = "rgba(%s, %s, %s, 255)" % (rHalo, gHalo, bHalo),
-        layer["paint"]["text-halo-width"] =  strokeWidth
+        layer["paint"]["text-halo-color"] = "rgba(%s, %s, %s, 255)" % (rHalo, gHalo, bHalo)
+        layer["paint"]["text-halo-width"] =  float(strokeWidth)
 
     rotation = -1 * float(qgisLayer.customProperty("labeling/angleOffset"))
     layer["layout"]["text-rotate"] = rotation

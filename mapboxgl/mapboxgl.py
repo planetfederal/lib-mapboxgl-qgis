@@ -1,13 +1,13 @@
-from qgis.core import * 
+from qgis.core import *
 from qgis.utils import iface
 import os
 import re
 import codecs
 from PyQt4.QtCore import *
+import math
 
 def qgisLayers():
-    skipType = [2]
-    return [lay for lay in iface.mapCanvas().layers() if lay.type() not in skipType]
+    return [lay for lay in iface.mapCanvas().layers() if lay.type() == lay.VectorLayer]
 
 def projectToMapbox(folder = None):
     if folder is None:
@@ -69,48 +69,100 @@ def createSources(folder, layers, precision = 2):
 
     return sources
 
-def _property(s):
-    return (lambda x: x.symbolLayer(0).properties()[s])
+def _toZoomLevel(lev):
+    #TODO
+    return lev
+
+def _property(s, default=None):
+    def _f(x):
+        try:
+            return float(x.symbolLayer(0).properties()[s])
+        except KeyError:
+            return default
+    return _f
 
 def _colorProperty(s):
-    return  (lambda x: _getRGBAColor(x.symbolLayer(0).properties()[s], x.alpha()))
+    def _f(x):
+        try:
+            return _getRGBColor(x.symbolLayer(0).properties()[s])
+        except KeyError:
+            return "rgb(0,0,0)"
+    return _f
 
-def _getRGBAColor(color, alpha):
+
+def _getRGBColor(color):
     try:
         r,g,b,a = color.split(",")
     except:
         color = color.lstrip('#')
         lv = len(color)
         r,g,b = tuple(str(int(color[i:i + lv // 3], 16)) for i in range(0, lv, lv // 3))
-        a = 255.0
-    a = float(a) / 255.0
-    return 'rgba(%s)' % ",".join([r, g, b, str(alpha * a)])
+    return 'rgb(%s)' % ",".join([r, g, b])
+
+
+def _fillPatternIcon(x):
+    try:
+        return x.svgFilePath()
+
+    except:
+        return None
+
+def _alpha(x):
+    try:
+        return x.alpha()
+    except:
+        return 1
+
+def _lineDash(x):
+    #TODO: improve this
+    try:
+        if x.symbolLayer(0).properties()["line_style"] == "solid":
+            return [1]
+        else:
+            return [3, 3]
+    except KeyError:
+        return [1]
 
 def _convertSymbologyForLayerType(symbols, functionType, layerType, attribute):
     d = {}
-    print layerType
     if layerType == "circle":
-        d["circle-radius"] = _paintProperty(symbols, _property("size"), functionType, attribute)
-        d["circle-color"] = _paintProperty(symbols, _colorProperty("outline_color"), functionType, attribute)
+        _setPaintProperty(d, "circle-radius", symbols, _property("size", 1), functionType, attribute)
+        _setPaintProperty(d, "circle-color", symbols, _colorProperty("color"), functionType, attribute)
+        _setPaintProperty(d, "circle-opacity", symbols, _alpha, functionType, attribute)
+        _setPaintProperty(d, "circle-stroke-width", symbols, _property("outline_width", 1), functionType, attribute)
+        _setPaintProperty(d, "circle-stroke-color", symbols, _colorProperty("outline_color"), functionType, attribute)
     elif layerType == "line":
-        d["line-width"] = _paintProperty(symbols, _property("line_width"), functionType, attribute)
-        d["line-color"] = _paintProperty(symbols, _colorProperty("line_color"), functionType, attribute)
-        #TODO:line dash pattern
+        _setPaintProperty(d, "line-width", symbols, _property("line_width", 1), functionType, attribute)
+        _setPaintProperty(d, "line-opacity", symbols, _alpha, functionType, attribute)
+        _setPaintProperty(d, "line-color", symbols, _colorProperty("line_color"), functionType, attribute)
+        _setPaintProperty(d, "line-offset", symbols, _property("offset"), functionType, attribute)
+        _setPaintProperty(d, "line-dasharray", symbols, _lineDash, functionType, attribute)
     elif layerType == "fill":
-        d["fill-color"] = _paintProperty(symbols, _colorProperty("color"), functionType, attribute)
-        d["fill-outline-color"] = _paintProperty(symbols, _colorProperty("outline_color"), functionType, attribute)
+        _setPaintProperty(d, "fill-color", symbols, _colorProperty("color"), functionType, attribute)
+        _setPaintProperty(d, "fill-outline-color", symbols, _colorProperty("outline_color"), functionType, attribute)
+        _setPaintProperty(d, "fill-pattern", symbols, _fillPatternIcon, functionType, attribute)
+        _setPaintProperty(d, "fill-opacity", symbols, _alpha, functionType, attribute)
+        _setPaintProperty(d, "fill-translate", symbols, _property("offset"), functionType, attribute)
 
     return d
 
-def _paintProperty(obj, func, funcType, attribute):
+def _setPaintProperty(paint, property, obj, func, funcType, attribute):
     if isinstance(obj, dict):
         d = {}
         d["property"] = attribute
-        d["stops"] = {k:func(v) for k,v in obj.iteritems()}
+        d["stops"] = {}
+        for k,v in obj.iteritems():
+            if v.symbolLayerCount() > 0:
+                d["stops"][k] = func(v)
         d["type"] = funcType
-        return d
+        for element in d["stops"].values():
+            if element is not None:
+                paint[property] = d
+                break
     else:
-        return func(obj)
+        v = func(obj)
+        if v:
+           paint[property] = v
 
 layerTypes = {QGis.Point: "circle", QGis.Line: "line", QGis.Polygon: "fill"}
 
@@ -121,21 +173,25 @@ def processLayer(qgisLayer):
         layer["id"] = "lyr_" + safeName(qgisLayer.name())
         layer["source"] = "src_" + safeName(qgisLayer.name())
         layer["type"] = layerTypes[qgisLayer.geometryType()]
+        if str(qgisLayer.customProperty("labeling/scaleVisibility")).lower() == "true":
+            layer["minzoom"]  = _toZoomLevel(float(qgisLayer.customProperty("labeling/scaleMin")))
+            layer["maxzoom"]  = _toZoomLevel(float(qgisLayer.customProperty("labeling/scaleMax")))
+
         renderer = qgisLayer.rendererV2()
         if isinstance(renderer, QgsSingleSymbolRendererV2):
-            symbols = renderer.symbol()
+            symbols = renderer.symbol().clone()
             functionType = None
             prop = None
         elif isinstance(renderer, QgsCategorizedSymbolRendererV2):
             symbols = {}
             for cat in renderer.categories():
-                symbols[cat.value()] = cat.symbol()
+                symbols[cat.value()] = cat.symbol().clone()
             functionType = "categorical"
             prop = renderer.classAttribute()
         elif isinstance(renderer, QgsGraduatedSymbolRendererV2):
             symbols = {}
             for ran in renderer.ranges():
-                symbols[ran.lowerValue()] = ran.symbol()
+                symbols[ran.lowerValue()] = ran.symbol().clone()
             functionType = "interval"
             prop = renderer.classAttribute()
         else:
@@ -153,11 +209,66 @@ def processLayer(qgisLayer):
         layers.append(processLabeling(qgisLayer))
     return layers
 
-def processLabeling(layer):
-    pass
+def processLabeling(qgisLayer):
+    layer = {}
+    layer["id"] = "txt_" + safeName(qgisLayer.name())
+    layer["source"] = "src_" + safeName(qgisLayer.name())
+    layer["type"] = "symbol"
+
+    layer["layout"] = {}
+    labelField = qgisLayer.customProperty("labeling/fieldName")
+    layer["layout"]["text-field"] = "{%s}" % labelField
+    try:
+        size = str(float(qgisLayer.customProperty("labeling/fontSize")) * 2)
+    except:
+        size = 1
+    layer["layout"]["text-size"] = size
+
+    layer["paint"] = {}
+    r = qgisLayer.customProperty("labeling/textColorR")
+    g = qgisLayer.customProperty("labeling/textColorG")
+    b = qgisLayer.customProperty("labeling/textColorB")
+    color = "rgba(%s, %s, %s, 255)" % (r,g,b)
+    layer["paint"]["text-color"] = color
+
+    if str(qgisLayer.customProperty("labeling/bufferDraw")).lower() == "true":
+        rHalo = str(qgisLayer.customProperty("labeling/bufferColorR"))
+        gHalo = str(qgisLayer.customProperty("labeling/bufferColorG"))
+        bHalo = str(qgisLayer.customProperty("labeling/bufferColorB"))
+        strokeWidth = str(float(qgisLayer.customProperty("labeling/bufferSize")))
+        layer["paint"]["text-halo-color"] = "rgba(%s, %s, %s, 255)" % (rHalo, gHalo, bHalo),
+        layer["paint"]["text-halo-width"] =  strokeWidth
+
+    rotation = -1 * float(qgisLayer.customProperty("labeling/angleOffset"))
+    layer["layout"]["text-rotate"] = rotation
+
+    offsetX = qgisLayer.customProperty("labeling/xOffset")
+    offsetY = qgisLayer.customProperty("labeling/yOffset")
+
+    layer["layout"]["text-offset"] = offsetX + "," + offsetY
+    layer["layout"]["text-opacity"] = (255 - int(qgisLayer.layerTransparency())) / 255.0
+
+    # textBaselines = ["bottom", "middle", "top"]
+    # textAligns = ["end", "center", "start"]
+    # quad = int(layer.customProperty("labeling/quadOffset"))
+    # textBaseline = textBaselines[quad / 3]
+    # textAlign = textAligns[quad % 3]
+    #===========================================================================
+
+    if str(qgisLayer.customProperty("labeling/scaleVisibility")).lower() == "true":
+        layer["minzoom"]  = _toZoomLevel(float(qgisLayer.customProperty("labeling/scaleMin")))
+        layer["maxzoom"]  = _toZoomLevel(float(qgisLayer.customProperty("labeling/scaleMax")))
+
+    return layer
+
 
 def safeName(name):
     #TODO: we are assuming that at least one character is valid...
     validChars = '123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
     return ''.join(c for c in name if c in validChars).lower()
+
+
+def setLayerSymbologyFromMapboxStyle(layer, style):
+    if style["type"] != layerTypes[qgisLayer.geometryType()]:
+        return
 

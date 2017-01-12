@@ -148,15 +148,15 @@ def _convertSymbologyForLayerType(symbols, functionType, layerType, attribute):
 
 def _setPaintProperty(paint, property, obj, func, funcType, attribute):
     if isinstance(obj, dict):
-        d = {}
+        d = []
         d["property"] = attribute
         d["stops"] = {}
         for k,v in obj.iteritems():
             if v.symbolLayerCount() > 0:
-                d["stops"][k] = func(v)
+                d["stops"].append([k, func(v)])
         d["type"] = funcType
-        for element in d["stops"].values():
-            if element is not None:
+        for element in d["stops"]:
+            if element[1] is not None:
                 paint[property] = d
                 break
     else:
@@ -268,7 +268,161 @@ def safeName(name):
     return ''.join(c for c in name if c in validChars).lower()
 
 
+def _markerSymbol(outlineColor, outlineWidth, color, size, opacity):
+    symbol = QgsMarkerSymbolV2()
+    symbolLayer = QgsSimpleMarkerSymbolLayer(size = radius, color = color)
+    symbolLayer.setOutlineColor(outlineColor)
+    symbolLayer.setOutlineWidth(outlineWidth)
+    symbol.appendSymbolLayer(symbolLayer)
+    smymbol.setAlpha(opacity)
+    return symbol
+
+def _fillSymbol(color, outlineColor, translate, opacity):
+    symbol = QgsFillSymbolV2()
+    symbolLayer = QgsSimpleFillSymbolLayer()
+    symbolLayer.setBorderColor(outlineColor)
+    x,y = translate.split(",")
+    symbolLayer.setOffset(QPointF(float(x), float(y)))
+    symbolLayer.setFillColor(color)
+    symbol.appendSymbolLayer(symbolLayer)
+    smymbol.setAlpha(opacity)
+    return symbol
+
 def setLayerSymbologyFromMapboxStyle(layer, style):
     if style["type"] != layerTypes[qgisLayer.geometryType()]:
         return
 
+    if style["type"] == "line":
+        if isinstance(list, style["paint"]["line-color"]):
+            if style["paint"]["circle-radius"]["type"] = "categorical":
+                renderer = QgsCategorizedSymbolRendererV2(style["paint"]["line-color"]["property"]
+                                                          .replace("{", "").replace("}", ""))
+                for i, stop in enumerate(style["paint"]["line-color"]["stops"]):
+                    dash = style["paint"]["line-dasharray"]["stops"][i][1]
+                    width = style["paint"]["line-width"]["stops"][i][1]
+                    offset = style["paint"]["line-offset"]["stops"][i][1]
+                    opacity = style["paint"]["circle-opacity"]["stops"][i][1]
+                    color = stop[1]
+                    symbol = _lineSymbol(color, width, dash, offset, opacity)
+                    value = stop[0]
+                    category = QgsRendererCategoryV2(value, symbol, value)
+                    renderer.addCategory(category)
+                layer.setRendererV2(renderer)
+            else:
+                renderer = QgsGraduatedSymbolRendererV2(style["paint"]["line-color"]["property"]
+                                                          .replace("{", "").replace("}", ""))
+                for i, stop in enumerate(style["paint"]["line-color"]["stops"]):
+                    dash = style["paint"]["line-dasharray"]["stops"][i][1]
+                    width = style["paint"]["line-width"]["stops"][i][1]
+                    offset = style["paint"]["line-offset"]["stops"][i][1]
+                    opacity = style["paint"]["line-opacity"]["stops"][i][1]
+                    color = stop[1]
+                    symbol = _lineSymbol(color, width, dash, offset, opacity)
+                    min = style["paint"]["line-color"]["stops"][i][0]
+                    try:
+                        min = stop[0]
+                    except:
+                        max = min
+                    range = QgsRendererRangeV2(min, max, symbol, str(min) + "-" + str(max))
+                    renderer.addClass(range)
+                layer.setRendererV2(renderer)
+        else:
+            dash = style["paint"]["line-dasharray"]["stops"][i][1]
+            width = style["paint"]["line-width"]["stops"][i][1]
+            offset = style["paint"]["line-offset"]["stops"][i][1]
+            opacity = style["paint"]["line-opacity"]["stops"][i][1]
+            color = stop[1]
+            symbol = _lineSymbol(color, width, dash, offset, opacity)
+            layer.setRendererV2(QgsSingleSymbolRendererV2(symbol))
+    elif style["type"] == "circle":
+        if isinstance(list, style["paint"]["circle-radius"]):
+            if style["paint"]["circle-radius"]["type"] = "categorical":
+                renderer = QgsCategorizedSymbolRendererV2(style["paint"]["circle-radius"]["property"]
+                                                          .replace("{", "").replace("}", ""))
+                for i, stop in enumerate(style["paint"]["circle-radius"]["stops"]):
+                    outlineColor = style["paint"]["circle-stroke-color"]["stops"][i][1]
+                    outlineWidth = style["paint"]["circle-stroke-width"]["stops"][i][1]
+                    color = style["paint"]["circle-color"]["stops"][i][1]
+                    opacity = style["paint"]["circle-opacity"]["stops"][i][1]
+                    radius = stop[1]
+                    symbol = _markerSymbol(outlineColor, outlineWidth, color, radius, opacity)
+                    value = stop[0]
+                    category = QgsRendererCategoryV2(value, symbol, value)
+                    renderer.addCategory(category)
+                layer.setRendererV2(renderer)
+            else:
+                renderer = QgsGraduatedSymbolRendererV2(style["paint"]["circle-radius"]["property"]
+                                                          .replace("{", "").replace("}", ""))
+                for i, stop in enumerate(style["paint"]["circle-radius"]["stops"]):
+                    outlineColor = style["paint"]["circle-stroke-color"]["stops"][i][1]
+                    outlineWidth = style["paint"]["circle-stroke-width"]["stops"][i][1]
+                    color = style["paint"]["circle-color"]["stops"][i][1]
+                    opacity = style["paint"]["circle-opacity"]["stops"][i][1]
+                    radius = stop[1]
+                    symbol = _markerSymbol(outlineColor, outlineWidth, color, radius, opacity)
+                    min = stop[0]
+                    try:
+                        max = style["paint"]["circle-radius"]["stops"][i+1][0]
+                    except:
+                        max = min
+                    range = QgsRendererRangeV2(min, max, symbol, str(min) + "-" + str(max))
+                    renderer.addClass(range)
+                layer.setRendererV2(renderer)
+        else:
+            outlineColor = style["paint"]["circle-stroke-color"]
+            outlineWidth = style["paint"]["circle-stroke-width"]
+            color = style["paint"]["circle-color"]
+            radius = style["paint"]["circle-radius"]
+            symbol = _markerSymbol(outlineColor, outlineWidth, color, radius)
+            layer.setRendererV2(QgsSingleSymbolRendererV2(symbol))
+    elif style["type"] == "fill":
+        if isinstance(list, style["paint"]["fill-color"]):
+            if style["paint"]["fill-color"]["type"] = "categorical":
+                renderer = QgsCategorizedSymbolRendererV2(style["paint"]["fill-color"]["property"]
+                                                          .replace("{", "").replace("}", ""))
+                for i, stop in enumerate(style["paint"]["fill-color"]["stops"]):
+                    outlineColor = style["paint"]["fill-outline-color"]["stops"][i][1]
+                    translate = style["paint"]["fill-translate"]["stops"][i][1]
+                    opacity = style["paint"]["fill-opacity"]["stops"][i][1]
+                    color = stop[1]
+                    symbol = _fillSymbol(color, outlineColor, translate, opacity)
+                    value = stop[0]
+                    category = QgsRendererCategoryV2(value, symbol, value)
+                    renderer.addCategory(category)
+                layer.setRendererV2(renderer)
+            else:
+                renderer = QgsGraduatedSymbolRendererV2(style["paint"]["fill-color"]["property"]
+                                                          .replace("{", "").replace("}", ""))
+                for i, stop in enumerate(style["paint"]["fill-color"]["stops"]):
+                    outlineColor = style["paint"]["fill-outline-color"]["stops"][i][1]
+                    translate = style["paint"]["fill-translate"]["stops"][i][1]
+                    opacity = style["paint"]["fill-opacity"]["stops"][i][1]
+                    color = stop[1]
+                    symbol = _fillSymbol(color, outlineColor, translate, opacity)
+                    min = stop[0]
+                    try:
+                        min = style["paint"]["fill-color"]["stops"][i+1][0]
+                    except:
+                        max = min
+                    range = QgsRendererRangeV2(min, max, symbol, str(min) + "-" + str(max))
+                    renderer.addClass(range)
+                layer.setRendererV2(renderer)
+        else:
+            outlineColor = style["paint"]["fill-outline-color"]["stops"][i][1]
+            translate = style["paint"]["fill-translate"]["stops"][i][1]
+            opacity = style["paint"]["fill-opacity"]["stops"][i][1]
+            color = stop[1]
+            symbol = _fillSymbol(color, outlineColor, translate, opacity)
+            layer.setRendererV2(QgsSingleSymbolRendererV2(symbol))
+
+def setLayerLabelingFromMapboxStyle(layer, style):
+    palyr = QgsPalLayerSettings()
+    palyr.readFromLayer(layer)
+    palyr.enabled = True
+    palyr.fieldName = style["layout"]["text-field"].replace("{", "").replace("}", "")
+    palyr.writeToLayer(layer)
+    palyr.setDataDefinedProperty(QgsPalLayerSettings.Size,True,True,style["layout"]["text-size"], "")
+    palyr.setDataDefinedProperty(QgsPalLayerSettings.Color,True,True,style["layout"]["text-color"], "")
+    palyr.setDataDefinedProperty(QgsPalLayerSettings.BufferColor,True,True,style["layout"]["text-halo-color"], "")
+    palyr.setDataDefinedProperty(QgsPalLayerSettings.BufferSize,True,True,style["layout"]["text-halo-width"], "")
+    palyr.writeToLayer(layer)

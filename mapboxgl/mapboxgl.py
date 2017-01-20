@@ -4,6 +4,7 @@ import os
 import re
 import codecs
 from PyQt4.QtCore import *
+from PyQt4.QtGui import QColor
 import math
 
 def qgisLayers():
@@ -78,6 +79,7 @@ def _property(s, default=None):
         try:
             return float(x.symbolLayer(0).properties()[s])
         except KeyError:
+            print s
             return default
     return _f
 
@@ -161,7 +163,7 @@ def _setPaintProperty(paint, property, obj, func, funcType, attribute):
                 break
     else:
         v = func(obj)
-        if v:
+        if v is not None:
            paint[property] = v
 
 layerTypes = {QGis.Point: "circle", QGis.Line: "line", QGis.Polygon: "fill"}
@@ -242,8 +244,8 @@ def processLabeling(qgisLayer):
     rotation = -1 * float(qgisLayer.customProperty("labeling/angleOffset"))
     layer["layout"]["text-rotate"] = rotation
 
-    offsetX = qgisLayer.customProperty("labeling/xOffset")
-    offsetY = qgisLayer.customProperty("labeling/yOffset")
+    offsetX = str(qgisLayer.customProperty("labeling/xOffset"))
+    offsetY = str(qgisLayer.customProperty("labeling/yOffset"))
 
     layer["layout"]["text-offset"] = offsetX + "," + offsetY
     layer["layout"]["text-opacity"] = (255 - int(qgisLayer.layerTransparency())) / 255.0
@@ -267,34 +269,49 @@ def safeName(name):
     validChars = '123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
     return ''.join(c for c in name if c in validChars).lower()
 
+def _qcolorFromRGBString(color):
+    color = "".join([c for c in color if c in "1234567890,"])
+    r, g, b = color.split(",")
+    return QColor(int(r), int(g), int(b))
+
 
 def _markerSymbol(outlineColor, outlineWidth, color, size, opacity):
     symbol = QgsMarkerSymbolV2()
-    symbolLayer = QgsSimpleMarkerSymbolLayer(size = radius, color = color)
-    symbolLayer.setOutlineColor(outlineColor)
+    symbolLayer = QgsSimpleMarkerSymbolLayerV2(size = size, color = _qcolorFromRGBString(color))
+    symbolLayer.setOutlineColor(_qcolorFromRGBString(outlineColor))
     symbolLayer.setOutlineWidth(outlineWidth)
     symbol.appendSymbolLayer(symbolLayer)
-    smymbol.setAlpha(opacity)
+    symbol.deleteSymbolLayer(0)
+    symbol.setAlpha(opacity)
     return symbol
 
 def _fillSymbol(color, outlineColor, translate, opacity):
     symbol = QgsFillSymbolV2()
-    symbolLayer = QgsSimpleFillSymbolLayer()
-    symbolLayer.setBorderColor(outlineColor)
+    symbolLayer = QgsSimpleFillSymbolLayerV2()
+    symbolLayer.setBorderColor(_qcolorFromRGBString(outlineColor))
     x,y = translate.split(",")
     symbolLayer.setOffset(QPointF(float(x), float(y)))
-    symbolLayer.setFillColor(color)
+    symbolLayer.setFillColor(_qcolorFromRGBString(color))
+    symbol.appendSymbolLayer(symbolLayer)
+    smymbol.setAlpha(opacity)
+    return symbol
+
+def _lineSymbol(color, width, dash, offset, opacity):
+    symbol = QgsLineSymbolV2()
+    symbolLayer = QgsSimpleLineSymbolLayerV2(_qcolorFromRGBString(color), width)
+    symbolLayer.setCustomDashVector(dash)
+    symbolLayer.setOffset(offset)
     symbol.appendSymbolLayer(symbolLayer)
     smymbol.setAlpha(opacity)
     return symbol
 
 def setLayerSymbologyFromMapboxStyle(layer, style):
-    if style["type"] != layerTypes[qgisLayer.geometryType()]:
+    if style["type"] != layerTypes[layer.geometryType()]:
         return
 
     if style["type"] == "line":
-        if isinstance(list, style["paint"]["line-color"]):
-            if style["paint"]["circle-radius"]["type"] = "categorical":
+        if isinstance(style["paint"]["line-color"], list):
+            if style["paint"]["circle-radius"]["type"] == "categorical":
                 renderer = QgsCategorizedSymbolRendererV2(style["paint"]["line-color"]["property"]
                                                           .replace("{", "").replace("}", ""))
                 for i, stop in enumerate(style["paint"]["line-color"]["stops"]):
@@ -327,16 +344,16 @@ def setLayerSymbologyFromMapboxStyle(layer, style):
                     renderer.addClass(range)
                 layer.setRendererV2(renderer)
         else:
-            dash = style["paint"]["line-dasharray"]["stops"][i][1]
-            width = style["paint"]["line-width"]["stops"][i][1]
-            offset = style["paint"]["line-offset"]["stops"][i][1]
-            opacity = style["paint"]["line-opacity"]["stops"][i][1]
-            color = stop[1]
+            dash = style["paint"]["line-dasharray"]
+            width = style["paint"]["line-width"]
+            offset = style["paint"]["line-offset"]
+            opacity = style["paint"]["line-opacity"]
+            color = style["paint"]["line-color"]
             symbol = _lineSymbol(color, width, dash, offset, opacity)
             layer.setRendererV2(QgsSingleSymbolRendererV2(symbol))
     elif style["type"] == "circle":
-        if isinstance(list, style["paint"]["circle-radius"]):
-            if style["paint"]["circle-radius"]["type"] = "categorical":
+        if isinstance(style["paint"]["circle-radius"], list):
+            if style["paint"]["circle-radius"]["type"] == "categorical":
                 renderer = QgsCategorizedSymbolRendererV2(style["paint"]["circle-radius"]["property"]
                                                           .replace("{", "").replace("}", ""))
                 for i, stop in enumerate(style["paint"]["circle-radius"]["stops"]):
@@ -373,11 +390,12 @@ def setLayerSymbologyFromMapboxStyle(layer, style):
             outlineWidth = style["paint"]["circle-stroke-width"]
             color = style["paint"]["circle-color"]
             radius = style["paint"]["circle-radius"]
-            symbol = _markerSymbol(outlineColor, outlineWidth, color, radius)
+            opacity = style["paint"]["circle-opacity"]
+            symbol = _markerSymbol(outlineColor, outlineWidth, color, radius, opacity)
             layer.setRendererV2(QgsSingleSymbolRendererV2(symbol))
     elif style["type"] == "fill":
-        if isinstance(list, style["paint"]["fill-color"]):
-            if style["paint"]["fill-color"]["type"] = "categorical":
+        if isinstance(style["paint"]["fill-color"], list):
+            if style["paint"]["fill-color"]["type"] == "categorical":
                 renderer = QgsCategorizedSymbolRendererV2(style["paint"]["fill-color"]["property"]
                                                           .replace("{", "").replace("}", ""))
                 for i, stop in enumerate(style["paint"]["fill-color"]["stops"]):
@@ -421,8 +439,20 @@ def setLayerLabelingFromMapboxStyle(layer, style):
     palyr.enabled = True
     palyr.fieldName = style["layout"]["text-field"].replace("{", "").replace("}", "")
     palyr.writeToLayer(layer)
-    palyr.setDataDefinedProperty(QgsPalLayerSettings.Size,True,True,style["layout"]["text-size"], "")
-    palyr.setDataDefinedProperty(QgsPalLayerSettings.Color,True,True,style["layout"]["text-color"], "")
-    palyr.setDataDefinedProperty(QgsPalLayerSettings.BufferColor,True,True,style["layout"]["text-halo-color"], "")
-    palyr.setDataDefinedProperty(QgsPalLayerSettings.BufferSize,True,True,style["layout"]["text-halo-width"], "")
+    palyr.setDataDefinedProperty(QgsPalLayerSettings.Size,True,True,str(style["layout"]["text-size"]), "")
+    palyr.setDataDefinedProperty(QgsPalLayerSettings.Color,True,True,str(style["paint"]["text-color"]), "")
+    if "text-halo-color" in style["layout"]:
+        palyr.setDataDefinedProperty(QgsPalLayerSettings.BufferColor,True,True,str(style["layout"]["text-halo-color"]), "")
+    if "text-halo-width" in style["layout"]:
+        palyr.setDataDefinedProperty(QgsPalLayerSettings.BufferSize,True,True,str(style["layout"]["text-halo-width"]), "")
     palyr.writeToLayer(layer)
+
+def _testRoundTrip():
+    import processing
+    layerA = processing.getObject("a")
+    style = layerToMapbox("/Users/volaya/mapboxgl", layerA)
+    import json
+    print json.dumps(style, indent=4, sort_keys=True)
+    layerB = processing.getObject("b")
+    setLayerSymbologyFromMapboxStyle(layerB, style["layers"][0])
+    setLayerLabelingFromMapboxStyle(layerB, style["layers"][1])

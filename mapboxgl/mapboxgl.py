@@ -47,7 +47,6 @@ def createSources(folder, layers, precision = 2):
         if layer.type() == layer.VectorLayer:
             layerName =  safeName(layer.name())
             path = os.path.join(layersFolder, "%s.geojson" % layerName)
-            '''
             QgsVectorFileWriter.writeAsVectorFormat(layer, path, "utf-8", layer.crs(), 'GeoJson')
             with codecs.open(path, encoding="utf-8") as f:
                 lines = f.readlines()
@@ -64,16 +63,18 @@ def createSources(folder, layers, precision = 2):
                         line = line.replace("]]", "]")
                     line = regexp.sub(r'"geometry":null', line)
                     f.write(line)
-            '''
             sources[layerName] = {"type": "geojson",
                                 "data": "./data/lyr_%s.geojson" % layerName
                                 }
 
     return sources
 
-def _toZoomLevel(lev):
-    #TODO
-    return lev
+def _toZoomLevel(scale):
+    return int(math.log(1000000000 / scale, 2))
+
+def _toScale(level):
+    return 1000000000 / (math.pow(2, level))
+
 
 def _property(s, default=None):
     def _f(x):
@@ -152,7 +153,7 @@ def _convertSymbologyForLayerType(symbols, functionType, layerType, attribute):
 def _setPaintProperty(paint, property, obj, func, funcType, attribute):
     if isinstance(obj, OrderedDict):
         d = {}
-        d["property"] = attribute
+        d["property"] = "{%s}" % attribute
         d["stops"] = []
         for k,v in obj.iteritems():
             if v.symbolLayerCount() > 0:
@@ -165,7 +166,7 @@ def _setPaintProperty(paint, property, obj, func, funcType, attribute):
     else:
         v = func(obj)
         if v is not None:
-           paint[property] = v
+            paint[property] = v
 
 layerTypes = {QGis.Point: "circle", QGis.Line: "line", QGis.Polygon: "fill"}
 
@@ -222,7 +223,7 @@ def processLabeling(qgisLayer):
     labelField = qgisLayer.customProperty("labeling/fieldName")
     layer["layout"]["text-field"] = "{%s}" % labelField
     try:
-        size = float(qgisLayer.customProperty("labeling/fontSize")) * 2
+        size = float(qgisLayer.customProperty("labeling/fontSize"))
     except:
         size = 1
     layer["layout"]["text-size"] = size
@@ -439,9 +440,21 @@ def setLayerLabelingFromMapboxStyle(layer, style):
     palyr.readFromLayer(layer)
     palyr.enabled = True
     palyr.fieldName = style["layout"]["text-field"].replace("{", "").replace("}", "")
-    palyr.writeToLayer(layer)
+    #palyr.writeToLayer(layer)
+    offsets = style["layout"]["text-offset"].split(",")
+    palyr.xOffset = float(offsets[0])
+    palyr.yOffset = float(offsets[0])
+    if "minzoom" in style:
+        palyr.scaleMin = _toScale(float(style["minzoom"]))
+        palyr.scaleMax = _toScale(float(style["maxzoom"]))
+        palyr.scaleVisibility = True
+        palyr.placement = QgsPalLayerSettings.OverPoint
+
+    #palyr.setDataDefinedProperty(QgsPalLayerSettings.OffsetXY,True,True,str(offsets), "")
     palyr.setDataDefinedProperty(QgsPalLayerSettings.Size,True,True,str(style["layout"]["text-size"]), "")
     palyr.setDataDefinedProperty(QgsPalLayerSettings.Color,True,True,str(style["paint"]["text-color"]), "")
+
+
     if "text-halo-color" in style["layout"]:
         palyr.setDataDefinedProperty(QgsPalLayerSettings.BufferColor,True,True,str(style["layout"]["text-halo-color"]), "")
     if "text-halo-width" in style["layout"]:
@@ -449,11 +462,15 @@ def setLayerLabelingFromMapboxStyle(layer, style):
     palyr.writeToLayer(layer)
 
 def _testRoundTrip():
-    import processing
-    layerA = processing.getObject("a")
-    style = layerToMapbox("d:\\mapbox", layerA)
     import json
-    print json.dumps(style, indent=4, sort_keys=True)
-    layerB = processing.getObject("b")
-    setLayerSymbologyFromMapboxStyle(layerB, style["layers"][0])
-    setLayerLabelingFromMapboxStyle(layerB, style["layers"][1])
+    import processing
+    from processing import dataobjects
+    layerA = processing.getObject("points")
+    styles = projectToMapbox("d:\\mapbox")
+    print json.dumps(styles, indent=4, sort_keys=True)
+    layerA2 =dataobjects.load(layerA.source(), "points2")
+    setLayerSymbologyFromMapboxStyle(layerA2, styles["layers"][0])
+    setLayerLabelingFromMapboxStyle(layerA2, styles["layers"][1])
+    layerB2 =dataobjects.load(layerA.source(), "pointsb2")
+    setLayerSymbologyFromMapboxStyle(layerB2, styles["layers"][2])
+

@@ -81,8 +81,9 @@ def _property(s, default=None):
         try:
             return float(x.symbolLayer(0).properties()[s])
         except KeyError:
-            print s
             return default
+        except ValueError:
+            return str(x.symbolLayer(0).properties()[s])
     return _f
 
 def _colorProperty(s):
@@ -295,7 +296,7 @@ def _fillSymbol(color, outlineColor, translate, opacity):
     symbolLayer.setOffset(QPointF(float(x), float(y)))
     symbolLayer.setFillColor(_qcolorFromRGBString(color))
     symbol.appendSymbolLayer(symbolLayer)
-    smymbol.setAlpha(opacity)
+    symbol.setAlpha(opacity)
     return symbol
 
 def _lineSymbol(color, width, dash, offset, opacity):
@@ -304,7 +305,7 @@ def _lineSymbol(color, width, dash, offset, opacity):
     symbolLayer.setCustomDashVector(dash)
     symbolLayer.setOffset(offset)
     symbol.appendSymbolLayer(symbolLayer)
-    smymbol.setAlpha(opacity)
+    symbol.setAlpha(opacity)
     return symbol
 
 def setLayerSymbologyFromMapboxStyle(layer, style):
@@ -428,10 +429,10 @@ def setLayerSymbologyFromMapboxStyle(layer, style):
                                                           .replace("{", "").replace("}", ""), ranges)
                 layer.setRendererV2(renderer)
         else:
-            outlineColor = style["paint"]["fill-outline-color"]["stops"][i][1]
-            translate = style["paint"]["fill-translate"]["stops"][i][1]
-            opacity = style["paint"]["fill-opacity"]["stops"][i][1]
-            color = stop[1]
+            outlineColor = style["paint"]["fill-outline-color"]
+            translate = style["paint"]["fill-translate"]
+            opacity = style["paint"]["fill-opacity"]
+            color = style["paint"]["fill-color"]
             symbol = _fillSymbol(color, outlineColor, translate, opacity)
             layer.setRendererV2(QgsSingleSymbolRendererV2(symbol))
 
@@ -461,16 +462,4 @@ def setLayerLabelingFromMapboxStyle(layer, style):
         palyr.setDataDefinedProperty(QgsPalLayerSettings.BufferSize,True,True,str(style["layout"]["text-halo-width"]), "")
     palyr.writeToLayer(layer)
 
-def _testRoundTrip():
-    import json
-    import processing
-    from processing import dataobjects
-    layerA = processing.getObject("points")
-    styles = projectToMapbox("d:\\mapbox")
-    print json.dumps(styles, indent=4, sort_keys=True)
-    layerA2 =dataobjects.load(layerA.source(), "points2")
-    setLayerSymbologyFromMapboxStyle(layerA2, styles["layers"][0])
-    setLayerLabelingFromMapboxStyle(layerA2, styles["layers"][1])
-    layerB2 =dataobjects.load(layerA.source(), "pointsb2")
-    setLayerSymbologyFromMapboxStyle(layerB2, styles["layers"][2])
 

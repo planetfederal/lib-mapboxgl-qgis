@@ -314,13 +314,13 @@ def setLayerSymbologyFromMapboxStyle(layer, style):
 
     if style["type"] == "line":
         if isinstance(style["paint"]["line-color"], dict):
-            if style["paint"]["circle-radius"]["type"] == "categorical":
+            if style["paint"]["line-color"]["type"] == "categorical":
                 categories = []
                 for i, stop in enumerate(style["paint"]["line-color"]["stops"]):
                     dash = style["paint"]["line-dasharray"]["stops"][i][1]
                     width = style["paint"]["line-width"]["stops"][i][1]
                     offset = style["paint"]["line-offset"]["stops"][i][1]
-                    opacity = style["paint"]["circle-opacity"]["stops"][i][1]
+                    opacity = style["paint"]["line-opacity"]["stops"][i][1]
                     color = stop[1]
                     symbol = _lineSymbol(color, width, dash, offset, opacity)
                     value = stop[0]

@@ -74,7 +74,7 @@
         <ymax>4464262.5</ymax>
       </extent>
       <id>polygons20170125103400669</id>
-      <datasource>D:\polygons.geojson</datasource>
+      <datasource>polygons.geojson</datasource>
       <keywordList>
         <value></value>
       </keywordList>
@@ -201,7 +201,7 @@
     </maplayer>
     <maplayer simplifyAlgorithm="0" minimumScale="0" maximumScale="1e+08" simplifyDrawingHints="1" readOnly="0" minLabelScale="0" maxLabelScale="1e+08" simplifyDrawingTol="1" geometry="Polygon" simplifyMaxScale="1" type="vector" hasScaleBasedVisibilityFlag="0" simplifyLocal="1" scaleBasedLabelVisibilityFlag="0">
       <id>polygons_copy20170125104708514</id>
-      <datasource>D:\polygons.geojson</datasource>
+      <datasource>polygons.geojson</datasource>
       <keywordList>
         <value></value>
       </keywordList>

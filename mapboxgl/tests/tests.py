@@ -42,3 +42,17 @@ def testRoundTripPolygons():
     layerC2 =dataobjects.load(layerA.source(), "polygonsc2")
     mapboxgl.setLayerSymbologyFromMapboxStyle(layerC2, styles["layers"][2])
     shutil.rmtree(folder, ignore_errors=True)
+
+def testRoundTripLines():
+    projectFile = os.path.join(os.path.dirname(__file__), "data", "testlines.qgs")
+    iface.addProject(projectFile)
+    layerA = processing.getObject("lines")
+    folder = tempfile.mkdtemp()
+    styles = mapboxgl.projectToMapbox(folder)
+    layerA2 =dataobjects.load(layerA.source(), "lines2")
+    mapboxgl.setLayerSymbologyFromMapboxStyle(layerA2, styles["layers"][0])
+    layerB2 =dataobjects.load(layerA.source(), "linesb2")
+    mapboxgl.setLayerSymbologyFromMapboxStyle(layerB2, styles["layers"][1])
+    layerC2 =dataobjects.load(layerA.source(), "linesc2")
+    mapboxgl.setLayerSymbologyFromMapboxStyle(layerC2, styles["layers"][2])
+    shutil.rmtree(folder, ignore_errors=True)

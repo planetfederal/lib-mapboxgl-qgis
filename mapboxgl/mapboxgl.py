@@ -12,17 +12,12 @@ def qgisLayers():
     return [lay for lay in iface.mapCanvas().layers() if lay.type() == lay.VectorLayer]
 
 def projectToMapbox(folder = None):
-    if folder is None:
-        folder = "~/mapbox"
     return toMapbox(folder, qgisLayers())
 
-def layerToMapbox(folder, layer):
-    return toMapbox(folder, [layer])
+def layerToMapbox(layer, folder = None):
+    return toMapbox(folder, [layer])   
 
-def layersToMapbox(folder, layers):
-    return toMapbox(folder, layer)    
-
-def toMapbox(folder, layers):
+def toMapbox(layers, folder = None):
     return {
         "version": 8,
         "name": "QGIS project",

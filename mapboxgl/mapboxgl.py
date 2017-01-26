@@ -19,6 +19,9 @@ def projectToMapbox(folder = None):
 def layerToMapbox(folder, layer):
     return toMapbox(folder, [layer])
 
+def layersToMapbox(folder, layers):
+    return toMapbox(folder, layer)    
+
 def toMapbox(folder, layers):
     return {
         "version": 8,
@@ -37,8 +40,9 @@ def createLayers(_layers):
 
 def createSources(folder, layers, precision = 2):
     sources = {}
-    layersFolder = os.path.join(folder, "data")
-    QDir().mkpath(layersFolder)
+    if folder is not None:
+        layersFolder = os.path.join(folder, "data")
+        QDir().mkpath(layersFolder)
     reducePrecision = re.compile(r"([0-9]+\.[0-9]{%s})([0-9]+)" % precision)
     removeSpaces = lambda txt:'"'.join( it if i%2 else ''.join(it.split())
                          for i,it in enumerate(txt.split('"')))
@@ -46,23 +50,24 @@ def createSources(folder, layers, precision = 2):
     for layer in layers:
         if layer.type() == layer.VectorLayer:
             layerName =  safeName(layer.name())
-            path = os.path.join(layersFolder, "%s.geojson" % layerName)
-            QgsVectorFileWriter.writeAsVectorFormat(layer, path, "utf-8", layer.crs(), 'GeoJson')
-            with codecs.open(path, encoding="utf-8") as f:
-                lines = f.readlines()
-            with codecs.open(path, "w", encoding="utf-8") as f:
-                for line in lines:
-                    line = reducePrecision.sub(r"\1", line)
-                    line = line.strip("\n\t ")
-                    line = removeSpaces(line)
-                    if layer.wkbType()==QGis.WKBMultiPoint:
-                        line = line.replace("MultiPoint", "Point")
-                        line = line.replace("[ [", "[")
-                        line = line.replace("] ]", "]")
-                        line = line.replace("[[", "[")
-                        line = line.replace("]]", "]")
-                    line = regexp.sub(r'"geometry":null', line)
-                    f.write(line)
+            if folder is not None:
+                path = os.path.join(layersFolder, "%s.geojson" % layerName)
+                QgsVectorFileWriter.writeAsVectorFormat(layer, path, "utf-8", layer.crs(), 'GeoJson')
+                with codecs.open(path, encoding="utf-8") as f:
+                    lines = f.readlines()
+                with codecs.open(path, "w", encoding="utf-8") as f:
+                    for line in lines:
+                        line = reducePrecision.sub(r"\1", line)
+                        line = line.strip("\n\t ")
+                        line = removeSpaces(line)
+                        if layer.wkbType()==QGis.WKBMultiPoint:
+                            line = line.replace("MultiPoint", "Point")
+                            line = line.replace("[ [", "[")
+                            line = line.replace("] ]", "]")
+                            line = line.replace("[[", "[")
+                            line = line.replace("]]", "]")
+                        line = regexp.sub(r'"geometry":null', line)
+                        f.write(line)
             sources[layerName] = {"type": "geojson",
                                 "data": "./data/lyr_%s.geojson" % layerName
                                 }

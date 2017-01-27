@@ -36,8 +36,7 @@ def createLayers(_layers):
 def createSources(folder, layers, precision = 2):
     sources = {}
     if folder is not None:
-        layersFolder = os.path.join(folder, "data")
-        QDir().mkpath(layersFolder)
+        QDir().mkpath(os.path.join(folder, "data"))
     reducePrecision = re.compile(r"([0-9]+\.[0-9]{%s})([0-9]+)" % precision)
     removeSpaces = lambda txt:'"'.join( it if i%2 else ''.join(it.split())
                          for i,it in enumerate(txt.split('"')))
@@ -64,7 +63,7 @@ def createSources(folder, layers, precision = 2):
                         line = regexp.sub(r'"geometry":null', line)
                         f.write(line)
             sources[layerName] = {"type": "geojson",
-                                "data": "./data/lyr_%s.geojson" % layerName
+                                "data": "%s.geojson" % layerName
                                 }
 
     return sources
@@ -175,8 +174,8 @@ def processLayer(qgisLayer):
     layers = []
     try:
         layer = {}
-        layer["id"] = "lyr_" + safeName(qgisLayer.name())
-        layer["source"] = "src_" + safeName(qgisLayer.name())
+        layer["id"] = safeName(qgisLayer.name())
+        layer["source"] = safeName(qgisLayer.name())
         layer["type"] = layerTypes[qgisLayer.geometryType()]
         if str(qgisLayer.customProperty("labeling/scaleVisibility")).lower() == "true":
             layer["minzoom"]  = _toZoomLevel(float(qgisLayer.customProperty("labeling/scaleMin")))

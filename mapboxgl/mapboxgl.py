@@ -29,7 +29,7 @@ def toMapbox(qgislayers, folder):
         "layers": layers
     }
     if sprites:
-        obj["sprite"] = "./sprites",
+        obj["sprite"] = "./sprites"
     with open(os.path.join(folder, "mapbox.json"), 'w') as f:
         json.dump(obj, f)
 
@@ -83,7 +83,7 @@ def saveSprites(folder, sprites):
         with open(os.path.join(folder, "sprites@2x.json"), 'w') as f:
             json.dump(spritesheet2x, f)
 
-def createSources(folder, layers, precision = 2):
+def createSources(folder, layers, precision = 6):
     sources = {}
     layersFolder = os.path.join(folder, "data")
     QDir().mkpath(layersFolder)
@@ -381,6 +381,7 @@ def _fillSymbol(color, outlineColor, translate, opacity):
     symbolLayer.setOffset(QPointF(float(x), float(y)))
     symbolLayer.setFillColor(_qcolorFromRGBString(color))
     symbol.appendSymbolLayer(symbolLayer)
+    symbol.deleteSymbolLayer(0)
     symbol.setAlpha(opacity)
     return symbol
 
@@ -390,12 +391,48 @@ def _lineSymbol(color, width, dash, offset, opacity):
     symbolLayer.setCustomDashVector(dash)
     symbolLayer.setOffset(offset)
     symbol.appendSymbolLayer(symbolLayer)
+    symbol.deleteSymbolLayer(0)
     symbol.setAlpha(opacity)
+    return symbol
+
+_svgTemplate =  """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+    <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+    "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+    <svg version="1.1"
+    xmlns="http://www.w3.org/2000/svg"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+    width="240px" height="240px" viewBox="0 0 240 240">"""
+ """</svg>"""
+def _svgMarkerSymbol(name, sprites):
+    #TODO: see if there is a built-in sprite with that name
+
+    with open(sprites + ".json") as f:
+        spritesDict = json.load(f)
+    rect = QRect(spritesDict[name]["x"], spritesDict[name]["y"], 
+                spritesDict[name]["width"], spritesDict[name]["height"])
+    width = spritesDict[name]["width"]
+    height = spritesDict[name]["height"]
+    image = QImage()
+    image.load(sprites + ".png")
+    sprite = image.copy(rect)
+    pngPath = os.path.join(os.path.dirname(sprites), name + ".png")
+    sprite.save(pngPath)
+    with open(pngPath, "rb") as f:
+        data = f.read()
+    base64 = data.encode("base64")
+    svgPath = os.path.join(os.path.dirname(sprites), name + ".svg")
+    with open(svgPath, "w") as f:
+        f.write
+    symbol = QgsMarkerSymbolV2()
+    symbolLayer = QgsSvgMarkerSymbolLayerV2(svgPath)
+    symbol.setSize(max([width, height]))
+    symbol.appendSymbolLayer(symbolLayer)
+    symbol.deleteSymbolLayer(0)
     return symbol
 
 layerTypes = {QGis.Point: ["circle", "symbol"], QGis.Line: ["line"], QGis.Polygon: ["fill"]}
 
-def setLayerSymbologyFromMapboxStyle(layer, style):
+def setLayerSymbologyFromMapboxStyle(layer, style, sprites):
     if style["type"] not in layerTypes[layer.geometryType()]:
         return
 
@@ -516,6 +553,28 @@ def setLayerSymbologyFromMapboxStyle(layer, style):
             color = style["paint"]["fill-color"]
             symbol = _fillSymbol(color, outlineColor, translate, opacity)
             layer.setRendererV2(QgsSingleSymbolRendererV2(symbol))
+    elif style["type"] == "symbol":
+        if isinstance(style["paint"]["icon-image"], dict):
+            if style["paint"]["icon-image"]["type"] == "categorical":
+                categories = []
+                for i, stop in enumerate(style["paint"]["icon-image"]["stops"]):
+                    symbol = _svgMarkerSymbol(stop[1], sprites)
+                    value = stop[0]
+                    categories.append(QgsRendererCategoryV2(value, symbol, value))
+                renderer = QgsCategorizedSymbolRendererV2(style["paint"]["icon-image"]["property"], categories)
+                layer.setRendererV2(renderer)
+            else:
+                ranges = []
+                for i, stop in enumerate(style["paint"]["icon-image"]["stops"]):
+                    symbol = _svgMarkerSymbol(stop[1], sprites)
+                    min = stop[0]
+                    try:
+                        max = style["paint"]["icon-image"]["stops"][i+1][0]
+                    except:
+                        max = 100000000000
+                    ranges.append(QgsRendererRangeV2(min, max, symbol, str(min) + "-" + str(max)))
+                renderer = QgsGraduatedSymbolRendererV2(style["paint"]["icon-image"]["property"], ranges)
+                layer.setRendererV2(renderer)
 
     layer.triggerRepaint()
 
@@ -524,7 +583,6 @@ def setLayerLabelingFromMapboxStyle(layer, style):
     palyr.readFromLayer(layer)
     palyr.enabled = True
     palyr.fieldName = style["layout"]["text-field"].replace("{", "").replace("}", "")
-    #palyr.writeToLayer(layer)
     offsets = style["layout"]["text-offset"].split(",")
     palyr.xOffset = float(offsets[0])
     palyr.yOffset = float(offsets[0])
@@ -550,6 +608,10 @@ def openProjectFromMapboxFile(mapboxFile):
     labels = []
     with open(mapboxFile) as f:
         project = json.load(f)
+    if "sprite" in project:
+        sprites = os.path.join(os.path.dirname(mapboxFile), project["sprite"])
+    else:
+        sprites = None
     for layer in project["layers"]:
         source = project["sources"][layer["source"]]["data"]
         path = os.path.join(os.path.dirname(mapboxFile), source)
@@ -557,7 +619,7 @@ def openProjectFromMapboxFile(mapboxFile):
             labels.append(layer)
         else:
             qgislayer = dataobjects.load(path, layer["id"])
-            setLayerSymbologyFromMapboxStyle(qgislayer, layer)
+            setLayerSymbologyFromMapboxStyle(qgislayer, layer, sprites)
             layers[layer["source"]] = qgislayer
     for labelLayer in labels:
         setLayerLabelingFromMapboxStyle(layers[labelLayer["source"]], labelLayer)

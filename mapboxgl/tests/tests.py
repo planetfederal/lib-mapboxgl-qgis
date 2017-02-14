@@ -8,6 +8,8 @@ import shutil
 import processing
 from processing import dataobjects
 import tempfile
+import webbrowser
+from distutils.dir_util import copy_tree
 
 def testRoundTripPoints():
     projectFile = os.path.join(os.path.dirname(__file__), "data", "testpoints.qgs")
@@ -56,3 +58,23 @@ def testRoundTripLines():
     layerC2 =dataobjects.load(layerA.source(), "linesc2")
     mapboxgl.setLayerSymbologyFromMapboxStyle(layerC2, styles["layers"][2])
     shutil.rmtree(folder, ignore_errors=True)
+
+def _testOLApp(project):
+    projectFile = os.path.join(os.path.dirname(__file__), "data", "%s.qgs" % project)
+    iface.addProject(projectFile)
+    folder = tempfile.mkdtemp()
+    mapboxgl.projectToMapbox(folder)
+    sampleAppFolder = os.path.join(os.path.dirname(__file__), "sampleapp")
+    copy_tree(sampleAppFolder, folder)
+    path = os.path.join(folder, "index.html")
+    webbrowser.open("file://" + path)
+
+def testPointsInOLApp():
+    _testOLApp("testpoints")
+
+def testLinesInOLApp():
+    _testOLApp("testlines")
+
+
+def testPOlygonsInOLApp():
+    _testOLApp("testpolygons")

@@ -8,6 +8,7 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui import QColor, QImage, QPixmap, QPainter
 import math
 from collections import OrderedDict
+from processing import dataobjects
 
 def qgisLayers():
     return [lay for lay in iface.mapCanvas().layers() if lay.type() == lay.VectorLayer]
@@ -18,15 +19,17 @@ def projectToMapbox(folder):
 def layerToMapbox(layer, folder):
     return toMapbox(folder, [layer])   
 
-def toMapbox(layers, folder):
+def toMapbox(qgislayers, folder):
+    layers, sprites = createLayers(folder, qgislayers)
     obj = {
         "version": 8,
         "name": "QGIS project",
-        "sprite": "./sprites",
         "glyphs": "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
-        "sources": createSources(folder, layers),
-        "layers": createLayers(folder, layers)
+        "sources": createSources(folder, qgislayers),
+        "layers": layers
     }
+    if sprites:
+        obj["sprite"] = "./sprites",
     with open(os.path.join(folder, "mapbox.json"), 'w') as f:
         json.dump(obj, f)
 
@@ -39,7 +42,7 @@ def createLayers(folder, _layers):
         allSprites.update(sprites)
     saveSprites(folder, allSprites)
     
-    return layers
+    return layers, sprites
 
 def saveSprites(folder, sprites):
     if sprites:
@@ -110,7 +113,7 @@ def createSources(folder, layers, precision = 2):
                         line = regexp.sub(r'"geometry":null', line)
                         f.write(line)
             sources[layerName] = {"type": "geojson",
-                                "data": "%s.geojson" % layerName
+                                "data": "data/%s.geojson" % layerName
                                 }
 
     return sources
@@ -299,7 +302,7 @@ def processLayer(qgisLayer):
 def processLabeling(qgisLayer):
     layer = {}
     layer["id"] = "txt_" + safeName(qgisLayer.name())
-    layer["source"] = "src_" + safeName(qgisLayer.name())
+    layer["source"] =  safeName(qgisLayer.name())
     layer["type"] = "symbol"
 
     layer["layout"] = {}
@@ -390,8 +393,10 @@ def _lineSymbol(color, width, dash, offset, opacity):
     symbol.setAlpha(opacity)
     return symbol
 
+layerTypes = {QGis.Point: ["circle", "symbol"], QGis.Line: ["line"], QGis.Polygon: ["fill"]}
+
 def setLayerSymbologyFromMapboxStyle(layer, style):
-    if style["type"] != layerTypes[layer.geometryType()]:
+    if style["type"] not in layerTypes[layer.geometryType()]:
         return
 
     if style["type"] == "line":
@@ -512,6 +517,8 @@ def setLayerSymbologyFromMapboxStyle(layer, style):
             symbol = _fillSymbol(color, outlineColor, translate, opacity)
             layer.setRendererV2(QgsSingleSymbolRendererV2(symbol))
 
+    layer.triggerRepaint()
+
 def setLayerLabelingFromMapboxStyle(layer, style):
     palyr = QgsPalLayerSettings()
     palyr.readFromLayer(layer)
@@ -531,11 +538,29 @@ def setLayerLabelingFromMapboxStyle(layer, style):
     palyr.setDataDefinedProperty(QgsPalLayerSettings.Size,True,True,str(style["layout"]["text-size"]), "")
     palyr.setDataDefinedProperty(QgsPalLayerSettings.Color,True,True,str(style["paint"]["text-color"]), "")
 
-
     if "text-halo-color" in style["layout"]:
         palyr.setDataDefinedProperty(QgsPalLayerSettings.BufferColor,True,True,str(style["layout"]["text-halo-color"]), "")
     if "text-halo-width" in style["layout"]:
         palyr.setDataDefinedProperty(QgsPalLayerSettings.BufferSize,True,True,str(style["layout"]["text-halo-width"]), "")
     palyr.writeToLayer(layer)
 
-
+def openProjectFromMapboxFile(mapboxFile):
+    iface.newProject()
+    layers = {}
+    labels = []
+    with open(mapboxFile) as f:
+        project = json.load(f)
+    for layer in project["layers"]:
+        source = project["sources"][layer["source"]]["data"]
+        path = os.path.join(os.path.dirname(mapboxFile), source)
+        if layer["id"].startswith("txt"):
+            labels.append(layer)
+        else:
+            qgislayer = dataobjects.load(path, layer["id"])
+            setLayerSymbologyFromMapboxStyle(qgislayer, layer)
+            layers[layer["source"]] = qgislayer
+    for labelLayer in labels:
+        setLayerLabelingFromMapboxStyle(layers[labelLayer["source"]], labelLayer)
+        
+        
+            

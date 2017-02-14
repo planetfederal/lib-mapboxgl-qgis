@@ -16,10 +16,10 @@
   <mapcanvas>
     <units>meters</units>
     <extent>
-      <xmin>243104.65517023473512381</xmin>
-      <ymin>4437730.95216927397996187</ymin>
-      <xmax>306104.65517023473512381</xmax>
-      <ymax>4480675.95216927397996187</ymax>
+      <xmin>-5.7916736499999999</xmin>
+      <ymin>40.19947197500000158</ymin>
+      <xmax>-5.76774834999999975</xmax>
+      <ymax>40.29611502499999887</ymax>
     </extent>
     <rotation>0</rotation>
     <projections>0</projections>
@@ -58,8 +58,14 @@
   </legend>
   <projectlayers>
     <maplayer simplifyAlgorithm="0" minimumScale="0" maximumScale="1e+08" simplifyDrawingHints="0" readOnly="0" minLabelScale="0" maxLabelScale="1e+08" simplifyDrawingTol="1" geometry="Point" simplifyMaxScale="1" type="vector" hasScaleBasedVisibilityFlag="0" simplifyLocal="1" scaleBasedLabelVisibilityFlag="0">
+      <extent>
+        <xmin>-5.79110399999999981</xmin>
+        <ymin>40.20177300000000287</ymin>
+        <xmax>-5.76831799999999983</xmax>
+        <ymax>40.29381399999999758</ymax>
+      </extent>
       <id>a_copy20170124094532852</id>
-      <datasource>pts.geojson</datasource>
+      <datasource>./pts.geojson</datasource>
       <keywordList>
         <value></value>
       </keywordList>
@@ -575,7 +581,7 @@ def my_form_open(dialog, layer, feature):
         <ymax>4464262.5</ymax>
       </extent>
       <id>pts20170123110426173</id>
-      <datasource>pts.geojson</datasource>
+      <datasource>./pts.geojson</datasource>
       <keywordList>
         <value></value>
       </keywordList>

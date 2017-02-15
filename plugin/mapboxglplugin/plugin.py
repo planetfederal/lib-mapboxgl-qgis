@@ -12,10 +12,10 @@ class MapboxGLPlugin:
         self.menuImport.deleteLater()
 
     def initGui(self):
-        self.actionImport = QtGui.QAction("Import Mapbox GL", self.iface.mainWindow())
+        self.actionImport = QtGui.QAction("Import Mapbox GL...", self.iface.mainWindow())
         self.actionImport.triggered.connect(self.importMapbox)
         self.iface.addPluginToMenu(u"Mapbox GL", self.actionImport)
-        self.actionExport = QtGui.QAction("Export Mapbox GL", self.iface.mainWindow())
+        self.actionExport = QtGui.QAction("Export Mapbox GL...", self.iface.mainWindow())
         self.actionExport.triggered.connect(self.exportMapbox)
         self.iface.addPluginToMenu(u"Mapbox GL", self.actionExport)
 

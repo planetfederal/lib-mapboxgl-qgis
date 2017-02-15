@@ -401,8 +401,10 @@ _svgTemplate =  """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
     <svg version="1.1"
     xmlns="http://www.w3.org/2000/svg"
     xmlns:xlink="http://www.w3.org/1999/xlink"
-    width="240px" height="240px" viewBox="0 0 240 240">"""
- """</svg>"""
+    width="%(w)ipx" height="%(h)ipx" viewBox="0 0 %(w)i %(h)i">
+    <image xlink:href="data:image/png;base64,%(b64)s" width="%(w)i" height="%(h)i" x="0" y="0" />
+    </svg>"""
+
 def _svgMarkerSymbol(name, sprites):
     #TODO: see if there is a built-in sprite with that name
 
@@ -422,10 +424,11 @@ def _svgMarkerSymbol(name, sprites):
     base64 = data.encode("base64")
     svgPath = os.path.join(os.path.dirname(sprites), name + ".svg")
     with open(svgPath, "w") as f:
-        f.write
+        f.write(_svgTemplate % {"w": width, "h": height, "b64": base64 })
     symbol = QgsMarkerSymbolV2()
     symbolLayer = QgsSvgMarkerSymbolLayerV2(svgPath)
-    symbol.setSize(max([width, height]))
+    symbolLayer.setSize(max([width, height]))
+    symbolLayer.setOutputUnit(QgsSymbolV2.Mixed)
     symbol.appendSymbolLayer(symbolLayer)
     symbol.deleteSymbolLayer(0)
     return symbol
@@ -448,7 +451,7 @@ def setLayerSymbologyFromMapboxStyle(layer, style, sprites):
                     color = stop[1]
                     symbol = _lineSymbol(color, width, dash, offset, opacity)
                     value = stop[0]
-                    categories.append(QgsRendererCategoryV2(value, symbol, value))
+                    categories.append(QgsRendererCategoryV2(value, symbol, str(value)))
                 renderer = QgsCategorizedSymbolRendererV2(style["paint"]["line-color"]["property"], categories)
                 layer.setRendererV2(renderer)
             else:
@@ -488,7 +491,7 @@ def setLayerSymbologyFromMapboxStyle(layer, style, sprites):
                     radius = stop[1]
                     symbol = _markerSymbol(outlineColor, outlineWidth, color, radius, opacity)
                     value = stop[0]
-                    categories.append(QgsRendererCategoryV2(value, symbol, value))
+                    categories.append(QgsRendererCategoryV2(value, symbol, str(value)))
                 renderer = QgsCategorizedSymbolRendererV2(style["paint"]["circle-radius"]["property"], categories)
                 layer.setRendererV2(renderer)
             else:
@@ -527,7 +530,7 @@ def setLayerSymbologyFromMapboxStyle(layer, style, sprites):
                     color = stop[1]
                     symbol = _fillSymbol(color, outlineColor, translate, opacity)
                     value = stop[0]
-                    categories.append(QgsRendererCategoryV2(value, symbol, value))
+                    categories.append(QgsRendererCategoryV2(value, symbol, str(value)))
                 renderer = QgsCategorizedSymbolRendererV2(style["paint"]["fill-color"]["property"], categories)
                 layer.setRendererV2(renderer)
             else:
@@ -560,7 +563,7 @@ def setLayerSymbologyFromMapboxStyle(layer, style, sprites):
                 for i, stop in enumerate(style["paint"]["icon-image"]["stops"]):
                     symbol = _svgMarkerSymbol(stop[1], sprites)
                     value = stop[0]
-                    categories.append(QgsRendererCategoryV2(value, symbol, value))
+                    categories.append(QgsRendererCategoryV2(value, symbol, str(value)))
                 renderer = QgsCategorizedSymbolRendererV2(style["paint"]["icon-image"]["property"], categories)
                 layer.setRendererV2(renderer)
             else:

@@ -223,7 +223,7 @@ def _convertSymbologyForLayer(qgisLayer, symbols, functionType, attribute):
                     sl2x.setSize(sl2x.size() * 2)
                     newSymbol = QgsMarkerSymbolV2()
                     newSymbol.appendSymbolLayer(sl)
-                    newSymbol.deleteSymbolLayer(iSymbolLayer)
+                    newSymbol.deleteSymbolLayer(0)
                     newSymbol2x = QgsMarkerSymbolV2()
                     newSymbol2x.appendSymbolLayer(sl2x)
                     newSymbol2x.deleteSymbolLayer(0)
@@ -635,16 +635,37 @@ def setLayerSymbologyFromMapboxStyle(layer, style, sprites, add):
             else:
                 ranges = []
                 for i, stop in enumerate(style["paint"]["icon-image"]["stops"]):
-                    symbol = _svgMarkerSymbol(stop[1], sprites)
-                    min = stop[0]
-                    try:
-                        max = style["paint"]["icon-image"]["stops"][i+1][0]
-                    except:
-                        max = 100000000000
-                    ranges.append(QgsRendererRangeV2(min, max, symbol, str(min) + "-" + str(max)))
-                renderer = QgsGraduatedSymbolRendererV2(style["paint"]["icon-image"]["property"], ranges)
-                layer.setRendererV2(renderer)
+                    if add:
+                        idx, rang = _getCategoryOrRange(layer, str(value))
+                        if idx != 1:                            
+                            symbol = rang.symbol().clone()
+                            symbolLayer = _svgMarkerSymbolLayer(stop[1], sprites)
+                            if symbolLayer is not None:
+                                symbol.appendSymbolLayer(symbolLayer)
+                                layer.rendererV2().updateRangeSymbol(idx, symbol)
+                    else:
+                        symbol = _svgMarkerSymbol(stop[1], sprites)
+                        min = stop[0]
+                        try:
+                            max = style["paint"]["icon-image"]["stops"][i+1][0]
+                        except:
+                            max = 100000000000
+                        ranges.append(QgsRendererRangeV2(min, max, symbol, str(min) + "-" + str(max)))
+                if not add:
+                    renderer = QgsGraduatedSymbolRendererV2(style["paint"]["icon-image"]["property"], ranges)
+                    layer.setRendererV2(renderer)
+        else:
+            if add:
+                symbol = layer.rendererV2().symbol()
+                symbolLayer = _svgMarkerSymbolLayer(style["paint"]["icon-image"], sprites)
+                if symbolLayer is not None:
+                    symbol.appendSymbolLayer(symbolLayer)
+                    layer.rendererV2().updateRangeSymbol(idx, symbol)
+            else:
+                symbol = _svgMarkerSymbol(style["paint"]["icon-image"], sprites)
+                layer.setRendererV2(QgsSingleSymbolRendererV2(symbol))
 
+    iface.legendInterface().refreshLayerSymbology(layer)
     layer.triggerRepaint()
 
 def setLayerLabelingFromMapboxStyle(layer, style):

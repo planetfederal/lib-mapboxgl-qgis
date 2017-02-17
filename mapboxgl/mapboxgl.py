@@ -32,6 +32,7 @@ def toMapbox(qgislayers, folder):
         obj["sprite"] = "./sprites"
     with open(os.path.join(folder, "mapbox.json"), 'w') as f:
         json.dump(obj, f)
+    return obj
 
 def createLayers(folder, _layers):
     layers = []

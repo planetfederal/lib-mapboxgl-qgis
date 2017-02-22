@@ -21,12 +21,17 @@ def layerToMapbox(layer, folder):
 
 def toMapbox(qgislayers, folder):
     layers, sprites = createLayers(folder, qgislayers)
+    extent = iface.mapCanvas().extent()
+    center = [(extent.xMinimum() + extent.xMaximum() ) / 2, (extent.yMinimum() + extent.yMaximum() ) / 2]
+    zoom = _toZoomLevel(iface.mapCanvas().scale())
     obj = {
         "version": 8,
         "name": "QGIS project",
         "glyphs": "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
         "sources": createSources(folder, qgislayers),
-        "layers": layers
+        "layers": layers,
+        "center": center,
+        "zoom": zoom
     }
     if sprites:
         obj["sprite"] = "./sprites"
@@ -47,6 +52,7 @@ def createLayers(folder, _layers):
 
 def saveSprites(folder, sprites):
     if sprites:
+        print sprites
         height = max([s.height() for s,s2x in sprites.values()])
         width = sum([s.width() for s,s2x in sprites.values()])
         img = QImage(width, height, QImage.Format_ARGB32)
@@ -224,19 +230,45 @@ def _iconName(iSymbolLayer):
         if iSymbolLayer >= x.symbolLayerCount():
             return None
         symbolLayer = x.symbolLayer(iSymbolLayer)
-        try:
+        if isinstance(symbolLayer, QgsSvgMarkerSymbolLayerV2):
             filename, ext = os.path.splitext(os.path.basename(symbolLayer.path()))
             return filename
-        except:
+        elif isinstance(symbolLayer, QgsSVGFillSymbolLayer):
+            filename, ext = os.path.splitext(os.path.basename(symbolLayer.svgFilePath()))
+            return filename
+        else:
             if symbolLayer not in _nonSvgIcons:
                 _nonSvgIcons[symbolLayer] = "nonsvg_%i" % len(_nonSvgIcons)
             return _nonSvgIcons[symbolLayer]
     return _f
         
+def _saveSymbolLayerSprite(symbol, iSymbolLayer):
+    sl = symbol.symbolLayer(iSymbolLayer).clone()
+    if isinstance(sl, QgsSVGFillSymbolLayer):
+        patternWidth = sl.patternWidth()
+        color = sl.svgFillColor()
+        outlineColor = sl.svgOutlineColor()
+        sl = QgsSvgMarkerSymbolLayerV2(sl.svgFilePath())
+        sl.setFillColor(color)
+        sl.setOutlineColor(outlineColor)
+        sl.setSize(patternWidth)
+        sl.setOutputUnit(QgsSymbolV2.Mixed)  
+    sl2x = sl.clone()
+    sl2x.setSize(sl2x.size() * 2)
+    newSymbol = QgsMarkerSymbolV2()
+    newSymbol.appendSymbolLayer(sl)
+    newSymbol.deleteSymbolLayer(0)
+    newSymbol2x = QgsMarkerSymbolV2()
+    newSymbol2x.appendSymbolLayer(sl2x)
+    newSymbol2x.deleteSymbolLayer(0)
+    img = newSymbol.asImage(QSize(sl.size(), sl.size()))
+    img2x = newSymbol2x.asImage(QSize(sl2x.size(), sl2x.size()))
+    return img, img2x
+
+
 def _convertSymbologyForLayer(qgisLayer, symbols, functionType, attribute):
     layers = []
     sprites = {}
-
     if not isinstance(symbols, OrderedDict):
         symbolLayerCount = symbols.symbolLayerCount()
     else:
@@ -248,20 +280,10 @@ def _convertSymbologyForLayer(qgisLayer, symbols, functionType, attribute):
         if layerType == "symbol":
             _symbols = symbols
             if not isinstance(symbols, OrderedDict):
-                _symbols = {symbols}
+                _symbols = {"singlesymbol": symbols}
             for symbol in _symbols.values():
                 if iSymbolLayer < symbol.symbolLayerCount():
-                    sl = symbol.symbolLayer(iSymbolLayer).clone()
-                    sl2x = symbol.symbolLayer(iSymbolLayer).clone()
-                    sl2x.setSize(sl2x.size() * 2)
-                    newSymbol = QgsMarkerSymbolV2()
-                    newSymbol.appendSymbolLayer(sl)
-                    newSymbol.deleteSymbolLayer(0)
-                    newSymbol2x = QgsMarkerSymbolV2()
-                    newSymbol2x.appendSymbolLayer(sl2x)
-                    newSymbol2x.deleteSymbolLayer(0)
-                    img = newSymbol.asImage(QSize(sl.size(), sl.size()))
-                    img2x = newSymbol2x.asImage(QSize(sl2x.size(), sl2x.size()))
+                    img, img2x = _saveSymbolLayerSprite(symbol, iSymbolLayer)
                     sprites[_iconName(iSymbolLayer)(symbol)] = (img, img2x)
             _setPaintProperty(paint, "icon-image", symbols, _iconName(iSymbolLayer), functionType, attribute)
         elif layerType == "line":
@@ -273,6 +295,15 @@ def _convertSymbologyForLayer(qgisLayer, symbols, functionType, attribute):
         elif layerType == "fill":
             _setPaintProperty(paint, "fill-color", symbols, _fillColor(iSymbolLayer), functionType, attribute)
             _setPaintProperty(paint, "fill-outline-color", symbols, _fillOutlineColor(iSymbolLayer), functionType, attribute)
+            _symbols = symbols
+            if not isinstance(symbols, OrderedDict):
+                _symbols = {"singlesymbol": symbols}
+            print _symbols
+            for symbol in _symbols.values():
+                if iSymbolLayer < symbol.symbolLayerCount():
+                    img, img2x = _saveSymbolLayerSprite(symbol, iSymbolLayer)
+                    if img:
+                        sprites[_iconName(iSymbolLayer)(symbol)] = (img, img2x)
             _setPaintProperty(paint, "fill-pattern", symbols, _fillPatternIcon(iSymbolLayer), functionType, attribute)
             _setPaintProperty(paint, "fill-opacity", symbols, _alpha, functionType, attribute)
             _setPaintProperty(paint, "fill-translate", symbols, _property("offset", iSymbolLayer), functionType, attribute)
@@ -424,18 +455,7 @@ def _qcolorFromRGBString(color):
     r, g, b = color.split(",")
     return QColor(int(r), int(g), int(b))
 
-
-def _markerSymbol(outlineColor, outlineWidth, color, size, opacity):
-    symbol = QgsMarkerSymbolV2()
-    symbolLayer = QgsSimpleMarkerSymbolLayerV2(size = size, color = _qcolorFromRGBString(color))
-    symbolLayer.setOutlineColor(_qcolorFromRGBString(outlineColor))
-    symbolLayer.setOutlineWidth(outlineWidth)
-    symbol.appendSymbolLayer(symbolLayer)
-    symbol.deleteSymbolLayer(0)
-    symbol.setAlpha(opacity)
-    return symbol
-
-def _fillSymbolLayer(color, outlineColor, translate, opacity):
+def _fillSymbolLayer(color, outlineColor, translate):
     symbolLayer = QgsSimpleFillSymbolLayerV2()
     symbolLayer.setBorderColor(_qcolorFromRGBString(outlineColor))
     x,y = translate.split(",")
@@ -445,22 +465,26 @@ def _fillSymbolLayer(color, outlineColor, translate, opacity):
 
 def _fillSymbol(color, outlineColor, translate, opacity):
     symbol = QgsFillSymbolV2()  
-    symbol.appendSymbolLayer(_svgFillSymbolLayer(color, outlineColor, translate, opacity))
+    symbol.appendSymbolLayer(_fillSymbolLayer(color, outlineColor, translate))
     symbol.deleteSymbolLayer(0)
     symbol.setAlpha(opacity)
     return symbol
 
 def _svgFillSymbolLayer(outlineColor, fillPattern, sprites):
     symbolLayer = QgsSVGFillSymbolLayer()
+    svgPath, size = _getSvgPath(fillPattern, sprites)
+    symbolLayer.setSvgFilePath(svgPath)
+    symbolLayer.setPatternWidth(size)
+    symbolLayer.setOutputUnit(QgsSymbolV2.Mixed) 
     subSymbol = QgsLineSymbolV2()
-    subSymbol.appendSymbolLayer(symbolLayer = QgsSimpleLineSymbolLayerV2(_qcolorFromRGBString(outlineColor)))
+    subSymbol.appendSymbolLayer(QgsSimpleLineSymbolLayerV2(_qcolorFromRGBString(outlineColor)))
     subSymbol.deleteSymbolLayer(0)
     symbolLayer.setSubSymbol(subSymbol)
     return symbolLayer
 
 def _svgFillSymbol(outlineColor, opacity, fillPattern, sprites):
     symbol = QgsFillSymbolV2()
-    symbol.appendSymbolLayer(_svgFillSymbolLayer(color, outlineColor, opacity, fillPattern))
+    symbol.appendSymbolLayer(_svgFillSymbolLayer(outlineColor, fillPattern, sprites))
     symbol.deleteSymbolLayer(0)
     symbol.setAlpha(opacity)
     return symbol
@@ -479,7 +503,7 @@ def _lineSymbol(color, width, dash, offset, opacity):
 def _getSvgPath(name, sprites):
     #TODO: see if there is a built-in sprite with that name    
     if name is None:
-        return 
+        return None, None
     with open(sprites + ".json") as f:
         spritesDict = json.load(f)
     rect = QRect(spritesDict[name]["x"], spritesDict[name]["y"], 
@@ -510,6 +534,8 @@ _svgTemplate =  """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
     </svg>"""
 
 def _svgMarkerSymbolLayer(name, sprites):
+    if name is None:
+        return None
     svgPath, size = _getSvgPath(name, sprites)
     symbolLayer = QgsSvgMarkerSymbolLayerV2(svgPath)
     symbolLayer.setSize(size)
@@ -612,18 +638,22 @@ def setLayerSymbologyFromMapboxStyle(layer, style, sprites, add):
                 symbol = _lineSymbol(color, width, dash, offset, opacity)
                 layer.setRendererV2(QgsSingleSymbolRendererV2(symbol))
     elif style["type"] == "fill":
-        if isinstance(style["paint"]["fill-color"], dict):
-            if style["paint"]["fill-color"]["type"] == "categorical":
+        var = style["paint"]["fill-color"] if "fill-color" in style["paint"] else style["paint"]["fill-pattern"]
+        if isinstance(var, dict):            
+            if var["type"] == "categorical":
                 categories = []
-                for i, stop in enumerate(style["paint"]["fill-color"]["stops"]):
+                for i, stop in enumerate(var["stops"]):
                     outlineColor = style["paint"]["fill-outline-color"]["stops"][i][1]
-                    translate = style["paint"]["fill-translate"]["stops"][i][1]
+                    try:
+                        translate = style["paint"]["fill-translate"]["stops"][i][1]
+                    except:
+                        translate = 0
                     opacity = style["paint"]["fill-opacity"]["stops"][i][1]
                     try:
                         fillPattern = style["paint"]["fill-pattern"]["stops"][i][1]
                     except KeyError:
                         fillPattern = None
-                    color = stop[1]
+                        color = stop[1]
                     value = stop[0]
                     if add:
                         idx, cat = _getCategoryOrRange(layer, str(value))
@@ -647,15 +677,18 @@ def setLayerSymbologyFromMapboxStyle(layer, style, sprites, add):
                     layer.setRendererV2(renderer)
             else:
                 ranges = []
-                for i, stop in enumerate(style["paint"]["fill-color"]["stops"]):
+                for i, stop in enumerate(var["stops"]):
                     outlineColor = style["paint"]["fill-outline-color"]["stops"][i][1]
-                    translate = style["paint"]["fill-translate"]["stops"][i][1]
+                    try:
+                        translate = style["paint"]["fill-translate"]["stops"][i][1]
+                    except:
+                        translate = 0
                     opacity = style["paint"]["fill-opacity"]["stops"][i][1]
                     try:
                         fillPattern = style["paint"]["fill-pattern"]["stops"][i][1]
                     except KeyError:
                         fillPattern = None
-                    color = stop[1]
+                        color = stop[1]
                     minValue = stop[0]
                     try:
                         maxValue = style["paint"]["fill-color"]["stops"][i+1][0]
@@ -684,13 +717,16 @@ def setLayerSymbologyFromMapboxStyle(layer, style, sprites, add):
                     layer.setRendererV2(renderer)
         else:
             outlineColor = style["paint"]["fill-outline-color"]
-            translate = style["paint"]["fill-translate"]
+            try:
+                translate = style["paint"]["fill-translate"]
+            except:
+                translate = 0
             opacity = style["paint"]["fill-opacity"]
-            color = style["paint"]["fill-color"]
             try:
                 fillPattern = style["paint"]["fill-pattern"]
             except KeyError:
                 fillPattern = None
+                color = style["paint"]["fill-color"]
             if add:
                 symbol = layer.rendererV2().symbol().clone()
                 if fillPattern is None:

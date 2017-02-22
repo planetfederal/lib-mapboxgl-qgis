@@ -252,9 +252,12 @@ def _saveSymbolLayerSprite(symbol, iSymbolLayer):
         sl.setFillColor(color)
         sl.setOutlineColor(outlineColor)
         sl.setSize(patternWidth)
-        sl.setOutputUnit(QgsSymbolV2.Mixed)  
+        sl.setOutputUnit(QgsSymbolV2.Pixel)  
     sl2x = sl.clone()
-    sl2x.setSize(sl2x.size() * 2)
+    try:
+        sl2x.setSize(sl2x.size() * 2)
+    except AttributeError:
+        return None, None
     newSymbol = QgsMarkerSymbolV2()
     newSymbol.appendSymbolLayer(sl)
     newSymbol.deleteSymbolLayer(0)
@@ -265,6 +268,15 @@ def _saveSymbolLayerSprite(symbol, iSymbolLayer):
     img2x = newSymbol2x.asImage(QSize(sl2x.size(), sl2x.size()))
     return img, img2x
 
+def _checkUnitsProperty(qgisLayer, symbols, iSymbolLayer, prop):
+    if not isinstance(symbols, dict):
+        symbols = {"singlesymbol": symbols}
+    for k,v in obj.iteritems():
+        value = v.symbolLayer(iSymbolLayer).properties()[prop]
+        if value != "Pixel":
+            QgsMessageLog.logMessage("Warning: marker symbol in layer '%s' (class '%s', symbol layer number %i) "
+                "uses units other than pixels. Only pixels are supported"
+                 % (qgisLayer.name(), k, iSymbolLayer + 1), level=QgsMessageLog.WARNING)
 
 def _convertSymbologyForLayer(qgisLayer, symbols, functionType, attribute):
     layers = []
@@ -281,12 +293,18 @@ def _convertSymbologyForLayer(qgisLayer, symbols, functionType, attribute):
             _symbols = symbols
             if not isinstance(symbols, OrderedDict):
                 _symbols = {"singlesymbol": symbols}
-            for symbol in _symbols.values():
+            for k, symbol in _symbols.iteritems():                
                 if iSymbolLayer < symbol.symbolLayerCount():
+                    sl = symbol.symbolLayer(iSymbolLayer)
+                    if sl.outputUnit() != QgsSymbolV2.Pixel:
+                        QgsMessageLog.logMessage("Warning: marker symbol in layer '%s' (class '%s', symbol layer number %i) "
+                            "uses units other than pixels. Only pixels are supported" 
+                            % (qgisLayer.name(), k, iSymbolLayer + 1), level=QgsMessageLog.WARNING)
                     img, img2x = _saveSymbolLayerSprite(symbol, iSymbolLayer)
                     sprites[_iconName(iSymbolLayer)(symbol)] = (img, img2x)
             _setPaintProperty(paint, "icon-image", symbols, _iconName(iSymbolLayer), functionType, attribute)
         elif layerType == "line":
+            _checkUnitsProperty(qgisLayer, symbols, iSymbolLayer, "line_width_unit")
             _setPaintProperty(paint, "line-width", symbols, _property("line_width", iSymbolLayer, 1), functionType, attribute)
             _setPaintProperty(paint, "line-opacity", symbols, _alpha, functionType, attribute)
             _setPaintProperty(paint, "line-color", symbols, _colorProperty("line_color", iSymbolLayer), functionType, attribute)
@@ -337,16 +355,7 @@ def _getLayerType(qgisLayer):
         return "fill"
     else:
         return "symbol"
-        '''
-        # Limitation:
-        # We take the first symbol if there are categories, and assume all categories use similar renderer
-        if isinstance(symbol, OrderedDict):
-            symbol = symbol.values()[0]
-        if isinstance(symbol.symbolLayer(0), QgsSvgMarkerSymbolLayerV2):
-            return "symbol"
-        else:
-            return "circle"
-        '''
+
 
 def processLayer(qgisLayer):
     allLayers = []
@@ -370,6 +379,7 @@ def processLayer(qgisLayer):
             functionType = "interval"
             prop = renderer.classAttribute()
         else:
+            QgsMessageLog.logMessage("Warning: unsupported renderer:" + renderer.__class__.__name__, level=QgsMessageLog.WARNING)
             return {}, []
 
         sprites, layers = _convertSymbologyForLayer(qgisLayer, symbols, functionType, prop)
@@ -385,7 +395,7 @@ def processLayer(qgisLayer):
         
     except Exception, e:
         import traceback
-        print traceback.format_exc()
+        QgsMessageLog.logMessage("ERROR: " + traceback.format_exc(), level=QgsMessageLog.CRITICAL)
         return {}, []
 
     if str(qgisLayer.customProperty("labeling/enabled")).lower() == "true":
@@ -475,7 +485,7 @@ def _svgFillSymbolLayer(outlineColor, fillPattern, sprites):
     svgPath, size = _getSvgPath(fillPattern, sprites)
     symbolLayer.setSvgFilePath(svgPath)
     symbolLayer.setPatternWidth(size)
-    symbolLayer.setOutputUnit(QgsSymbolV2.Mixed) 
+    symbolLayer.setOutputUnit(QgsSymbolV2.Pixel) 
     subSymbol = QgsLineSymbolV2()
     subSymbol.appendSymbolLayer(QgsSimpleLineSymbolLayerV2(_qcolorFromRGBString(outlineColor)))
     subSymbol.deleteSymbolLayer(0)
@@ -539,7 +549,7 @@ def _svgMarkerSymbolLayer(name, sprites):
     svgPath, size = _getSvgPath(name, sprites)
     symbolLayer = QgsSvgMarkerSymbolLayerV2(svgPath)
     symbolLayer.setSize(size)
-    symbolLayer.setOutputUnit(QgsSymbolV2.Mixed)  
+    symbolLayer.setOutputUnit(QgsSymbolV2.Pixel)  
     return symbolLayer  
 
 def _svgMarkerSymbol(name, sprites):

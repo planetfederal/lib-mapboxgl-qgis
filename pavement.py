@@ -1,5 +1,8 @@
 import os
 import shutil
+import requests
+import zipfile
+import StringIO
 
 from paver.easy import *
 
@@ -24,6 +27,19 @@ def installdev(options):
 def install3(options):
     _install(".qgis3")
 
+@task
+def setup(options):
+    path = os.path.abspath("./ol-mapbox-style")
+    if os.path.exists(path):
+        shutil.rmtree(path)
+    r = requests.get("https://api.github.com/repos/boundlessgeo/ol-mapbox-style/releases")
+    zipurl = r.json()[0]["zipball_url"]
+    r = requests.get(zipurl, stream=True)
+    z = zipfile.ZipFile(StringIO.StringIO(r.content))
+    z.extractall(path=path)
+    subfolder = os.listdir(path)[0]
+    shutil.copy2(os.path.join(path, subfolder, "dist", "olms.js"), "./mapboxgl/tests/sampleapp/olms.js")
+    shutil.rmtree(path)
 
 @task
 def install_devtools():

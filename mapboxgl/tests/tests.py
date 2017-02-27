@@ -63,9 +63,7 @@ def _testOLApp(project):
     projectFile = os.path.join(os.path.dirname(__file__), "data", "%s.qgs" % project)
     iface.addProject(projectFile)
     folder = tempfile.mkdtemp()
-    mapboxgl.projectToMapbox(folder)
-    sampleAppFolder = os.path.join(os.path.dirname(__file__), "sampleapp")
-    copy_tree(sampleAppFolder, folder)
+    mapboxgl.projectToMapbox(folder, True)
     path = os.path.join(folder, "index.html")
     webbrowser.open("file://" + path)
 

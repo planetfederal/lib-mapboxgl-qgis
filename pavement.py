@@ -14,6 +14,10 @@ def _install(folder):
     shutil.copytree(src, dst)
     src = os.path.join(os.path.dirname(__file__), 'mapboxgl', 'mapboxgl.py')
     shutil.copy2(src, dst)
+    src = os.path.join(os.path.dirname(__file__), 'mapboxgl', 'sampleapp')
+    dst = os.path.join(os.path.expanduser('~'),  folder, 'python', 'plugins', 'mapboxglplugin', 'sampleapp')
+    shutil.rmtree(dst, True)
+    shutil.copytree(src, dst)
 
 @task
 def install(options):
@@ -38,7 +42,7 @@ def setup(options):
     z = zipfile.ZipFile(StringIO.StringIO(r.content))
     z.extractall(path=path)
     subfolder = os.listdir(path)[0]
-    shutil.copy2(os.path.join(path, subfolder, "dist", "olms.js"), "./mapboxgl/tests/sampleapp/olms.js")
+    shutil.copy2(os.path.join(path, subfolder, "dist", "olms.js"), "./mapboxgl/sampleapp/olms.js")
     shutil.rmtree(path)
 
 @task

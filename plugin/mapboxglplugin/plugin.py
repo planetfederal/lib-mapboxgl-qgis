@@ -16,8 +16,11 @@ class MapboxGLPlugin:
         self.actionImport.triggered.connect(self.importMapbox)
         self.iface.addPluginToMenu(u"Mapbox GL", self.actionImport)
         self.actionExport = QtGui.QAction("Export Mapbox GL...", self.iface.mainWindow())
-        self.actionExport.triggered.connect(self.exportMapbox)
+        self.actionExport.triggered.connect(lambda: self.exportMapbox(False))
         self.iface.addPluginToMenu(u"Mapbox GL", self.actionExport)
+        self.actionExportWithApp = QtGui.QAction("Export Mapbox GL (include test OL app)...", self.iface.mainWindow())
+        self.actionExportWithApp.triggered.connect(lambda: self.exportMapbox(True))
+        self.iface.addPluginToMenu(u"Mapbox GL", self.actionExportWithApp)        
 
 
     def importMapbox(self):
@@ -25,9 +28,9 @@ class MapboxGLPlugin:
         if filename:
             mapboxgl.openProjectFromMapboxFile(filename)
         
-    def exportMapbox(self):
+    def exportMapbox(self, includeApp):
         folder =  QtGui.QFileDialog.getExistingDirectory(self.iface.mainWindow(), "Select folder to store project", 
                                                         "", QtGui.QFileDialog.ShowDirsOnly)
         if folder:
-            mapboxgl.projectToMapbox(folder)
-        
+            mapboxgl.projectToMapbox(folder, includeApp)
+    

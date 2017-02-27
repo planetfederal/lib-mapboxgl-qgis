@@ -41,25 +41,14 @@ Outline width is not supported, regardless of the renderer and the symbol type. 
 
 #Labelling
 
-
 Only parameters in the Text and Placement sections are supported.
 
-Text section
---------------
+##Text section
 
-Supported parameters: Style, Size, Color. Size only supported in points
+*Supported parameters:* Style, Size, Color. Size only supported in points
 
-Placement section
-------------------
+##Placement section
 
 The only mode supported is *Offset from Point* 
 
 Offset and Rotation are  supported. Quadrant is not, and will always behave as if the central quuadrant is selected
-
-
-
-
-
-
-
-Limitations due to different approaches in QGIS simbology and Mapbox GL format

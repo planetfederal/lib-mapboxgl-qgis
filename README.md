@@ -6,14 +6,14 @@ A library to export QGIs projects and layer symbology from QGIS into the Mapbox 
 
 To use the library in your QGIS plugin, just add the `mapboxgl.py` file to your plugin folder, so it can be imported and used.
 
-To export your project to mapboxgl format, do the following:
+To export your project to Mapbox GL format, do the following:
 
 ```python
 import mapboxgl
 mapboxgl.projectToMapBox(folder)
 ```
 
-where `folder` must the destination folder where you want the resulting files to be created.
+where `folder` must the destination folder where you want the resulting files to be created. Only layers that are visible will be exported. Disabled layers will  not get exported.
 
 Calling the above method will generate the following content in the specified folder:
 

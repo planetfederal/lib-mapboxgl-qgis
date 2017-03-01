@@ -880,18 +880,75 @@ def openProjectFromMapboxFile(mapboxFile):
 
 
 def compatibleSymbology(layer):
-    """Return True if layer symbology compatible with MapBox GL,
-    False otherwise
+    """Checks if layer symbology compatible with MapBox GL,
+    Returns tuple with two elements.
+
+    First element of the tuple contains compatibility flag: True if
+    layer symbology compatible with MapBox GL, False otherwise.
+    Second element of the tuple can be None if symbology fully
+    compatible or incompatible, or, if symbology only  partially
+    compatible,  str which describes level of the incompatibility.
     """
     renderer = layer.rendererV2()
 
-    # using if statement, as later we may want to add more precise
-    # reporing, e.g. if rendering is possible but with atrifacts
+    msg = None
+    compatible = False
+
     if isinstance(renderer, QgsSingleSymbolRendererV2):
-        return True
+        symbols = OrderedDict()
+        symbols["singlesymbol"] = renderer.symbol().clone()}
     elif isinstance(renderer, QgsCategorizedSymbolRendererV2):
-        return True
+        symbols = OrderedDict()
+        for cat in renderer.categories():
+            symbols[cat.value()] = cat.symbol().clone()
     elif isinstance(renderer, QgsGraduatedSymbolRendererV2):
-        return True
+        symbols = OrderedDict()
+        for ran in renderer.ranges():
+            symbols[ran.lowerValue()] = ran.symbol().clone()
     else:
-        return False
+        return (compatible, msg)
+
+    # check symbols
+    symbolLayerCount = max([s.symbolLayerCount() for s in symbols.values()])
+
+    for iSymbolLayer in range(symbolLayerCount):
+        layerType = _getLayerType(layer)
+
+        if layerType == "symbol":
+            for k, symbol in symbols.iteritems():
+                if iSymbolLayer < symbol.symbolLayerCount():
+                    sl = symbol.symbolLayer(iSymbolLayer)
+                    if sl.outputUnit() != QgsSymbolV2.Pixel:
+                        msg = "Warning: marker symbol (class '{}', "
+                              "symbol layer number {}) uses units "
+                              "other than pixels. Only pixels are "
+                              "supported".format(k, iSymbolLayer + 1)
+        elif layerType == "line":
+            msg = _checkUnits(symbols, iSymbolLayer, "line_width_unit")
+        elif layerType == "fill":
+            pass
+
+    return (compatible, msg)
+
+
+def _checkUnits(symbols, iSymbolLayer, prop):
+    """ Checks if specified property of the symbol has compatible
+    units. Returns None if units are compatible or message with
+    problem description if they are not compatible
+    """
+
+    msg = ''
+
+    for k, v in symbols.iteritems():
+        try:
+            value = v.symbolLayer(iSymbolLayer).properties()[prop]
+        except:
+            continue
+
+        if value != "Pixel":
+            msg += "Warning: marker symbol (class '{}', "
+                   "symbol layer number {}) uses units "
+                   "other than pixels. Only pixels are "
+                   "supported".format(k, iSymbolLayer + 1)
+
+    return msg is msg != '' else None

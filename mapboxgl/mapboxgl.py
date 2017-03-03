@@ -8,7 +8,7 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui import QColor, QImage, QPixmap, QPainter
 import math
 from collections import OrderedDict
-from processing import dataobjects
+from processing.tools import dataobjects
 from distutils.dir_util import copy_tree
 
 def qgisLayers():

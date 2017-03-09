@@ -896,7 +896,7 @@ def compatibleSymbology(layer):
 
     if isinstance(renderer, QgsSingleSymbolRendererV2):
         symbols = OrderedDict()
-        symbols["singlesymbol"] = renderer.symbol().clone()}
+        symbols["singlesymbol"] = renderer.symbol().clone()
     elif isinstance(renderer, QgsCategorizedSymbolRendererV2):
         symbols = OrderedDict()
         for cat in renderer.categories():
@@ -919,10 +919,10 @@ def compatibleSymbology(layer):
                 if iSymbolLayer < symbol.symbolLayerCount():
                     sl = symbol.symbolLayer(iSymbolLayer)
                     if sl.outputUnit() != QgsSymbolV2.Pixel:
-                        msg = "Warning: marker symbol (class '{}', "
+                        msg = ("Warning: marker symbol (class '{}', "
                               "symbol layer number {}) uses units "
                               "other than pixels. Only pixels are "
-                              "supported".format(k, iSymbolLayer + 1)
+                              "supported".format(k, iSymbolLayer + 1))
         elif layerType == "line":
             msg = _checkUnits(symbols, iSymbolLayer, "line_width_unit")
         elif layerType == "fill":
@@ -946,9 +946,9 @@ def _checkUnits(symbols, iSymbolLayer, prop):
             continue
 
         if value != "Pixel":
-            msg += "Warning: marker symbol (class '{}', "
+            msg += ("Warning: marker symbol (class '{}', "
                    "symbol layer number {}) uses units "
                    "other than pixels. Only pixels are "
-                   "supported".format(k, iSymbolLayer + 1)
+                   "supported".format(k, iSymbolLayer + 1))
 
-    return msg is msg != '' else None
+    return msg if msg != '' else None

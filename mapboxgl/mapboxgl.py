@@ -889,16 +889,24 @@ def openProjectFromMapboxFile(mapboxFile):
     else:
         sprites = None
     for layer in project["layers"]:
-        source = project["sources"][layer["source"]]["data"]
-        path = os.path.join(os.path.dirname(mapboxFile), source)
-        if layer["id"].startswith("txt"):
-            labels.append(layer)
-        else:
-            add = True
-            if layer["source"] not in layers:
-                add = False
-                layers[layer["source"]] = dataobjects.load(path, layer["id"])
-            setLayerSymbologyFromMapboxStyle(layers[layer["source"]], layer, sprites, add)
+        layerType = project["sources"][layer["source"]]["type"]
+        if layerType.lower() == "geojson":
+            source = project["sources"][layer["source"]]["data"]
+            path = os.path.join(os.path.dirname(mapboxFile), source)
+            if layer["id"].startswith("txt"):
+                labels.append(layer)
+            else:
+                add = True
+                if layer["source"] not in layers:
+                    add = False
+                    layers[layer["source"]] = dataobjects.load(path, layer["id"])
+                setLayerSymbologyFromMapboxStyle(layers[layer["source"]], layer, sprites, add)
+        elif layerType.lower() == "raster":
+            url = project["sources"][layer["source"]]["tiles"][0]
+            url = url.replace("bbox={bbox-epsg-3857}", "")
+            url = url.replace("&&", "&")
+            wmsLayer = QgsRasterLayer(url, layer["id"], "wms")
+            QgsMapLayerRegistry.instance().addMapLayer(wmsLayer)
     for labelLayer in labels:
         setLayerLabelingFromMapboxStyle(layers[labelLayer["source"]], labelLayer)
 

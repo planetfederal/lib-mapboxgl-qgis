@@ -9,7 +9,9 @@ class MapboxGLPlugin:
         self.iface = iface
 
     def unload(self):
-        self.menuImport.deleteLater()
+        self.iface.removePluginMenu(u"Mapbox GL", self.actionImport)
+        self.iface.removePluginMenu(u"Mapbox GL", self.actionExport)
+        self.iface.removePluginMenu(u"Mapbox GL", self.actionExportWithApp)
 
     def initGui(self):
         self.actionImport = QtGui.QAction("Import Mapbox GL...", self.iface.mainWindow())

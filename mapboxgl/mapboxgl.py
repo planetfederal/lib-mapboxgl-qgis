@@ -12,7 +12,8 @@ from processing.tools import dataobjects
 from distutils.dir_util import copy_tree
 
 def qgisLayers():
-    return [lay for lay in iface.mapCanvas().layers() if lay.type() == lay.VectorLayer]
+    return [lay for lay in iface.mapCanvas().layers() 
+            if lay.type() == lay.VectorLayer or lay.providerType().lower() == "wms"]
 
 def projectToMapbox(folder, includeApp = False):
     return toMapbox(qgisLayers(), folder, includeApp)
@@ -114,29 +115,44 @@ def createSources(folder, layers, precision = 6):
                          for i,it in enumerate(txt.split('"')))
     regexp = re.compile(r'"geometry":.*?null\}')
     for layer in layers:
+        layerName =  safeName(layer.name())
         if layer.type() == layer.VectorLayer:
-            layerName =  safeName(layer.name())
-            if folder is not None:
-                path = os.path.join(layersFolder, "%s.geojson" % layerName)
-                QgsVectorFileWriter.writeAsVectorFormat(layer, path, "utf-8", layer.crs(), 'GeoJson')
-                with codecs.open(path, encoding="utf-8") as f:
-                    lines = f.readlines()
-                with codecs.open(path, "w", encoding="utf-8") as f:
-                    for line in lines:
-                        line = reducePrecision.sub(r"\1", line)
-                        line = line.strip("\n\t ")
-                        line = removeSpaces(line)
-                        if layer.wkbType()==QGis.WKBMultiPoint:
-                            line = line.replace("MultiPoint", "Point")
-                            line = line.replace("[ [", "[")
-                            line = line.replace("] ]", "]")
-                            line = line.replace("[[", "[")
-                            line = line.replace("]]", "]")
-                        line = regexp.sub(r'"geometry":null', line)
-                        f.write(line)
+            path = os.path.join(layersFolder, "%s.geojson" % layerName)
+            QgsVectorFileWriter.writeAsVectorFormat(layer, path, "utf-8", layer.crs(), 'GeoJson')
+            with codecs.open(path, encoding="utf-8") as f:
+                lines = f.readlines()
+            with codecs.open(path, "w", encoding="utf-8") as f:
+                for line in lines:
+                    line = reducePrecision.sub(r"\1", line)
+                    line = line.strip("\n\t ")
+                    line = removeSpaces(line)
+                    if layer.wkbType()==QGis.WKBMultiPoint:
+                        line = line.replace("MultiPoint", "Point")
+                        line = line.replace("[ [", "[")
+                        line = line.replace("] ]", "]")
+                        line = line.replace("[[", "[")
+                        line = line.replace("]]", "]")
+                    line = regexp.sub(r'"geometry":null', line)
+                    f.write(line)
             sources[layerName] = {"type": "geojson",
                                 "data": "data/%s.geojson" % layerName
                                 }
+        else:
+            source = layer.source()
+            if "3857" not in layer.crs().authid():
+                QgsMessageLog.logMessage("WMS layer '%s' uses a CRS other than EPSG:3857. "
+                                         "Only EPSG:3857 is supported for WMS layers"
+                                        % layer.name(), level=QgsMessageLog.WARNING)
+
+            layers = re.search(r"layers=(.*?)(?:&|$)", source).groups(0)[0]
+            url = re.search(r"url=(.*?)(?:&|$)", source).groups(0)[0]
+            styles = re.search(r"styles=(.*?)(?:&|$)", source).groups(0)[0]
+            params = ("bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1"
+                    "&request=GetMap&srs=EPSG:3857&width=256&height=256")
+            wms = "%s?%sLAYERS=%s&STYLES=%s" % (url, params, layers, styles)
+            sources[layerName] = {"type": "raster", 
+                                  "tiles": [wms],
+                                  "tileSize": 256}
 
     return sources
 
@@ -383,46 +399,54 @@ def _getLayerType(qgisLayer):
 def processLayer(qgisLayer):
     allLayers = []
     allSprites = {}
-    try:
-        renderer = qgisLayer.rendererV2()
-        if isinstance(renderer, QgsSingleSymbolRendererV2):
-            symbols = renderer.symbol().clone()
-            functionType = None
-            prop = None
-        elif isinstance(renderer, QgsCategorizedSymbolRendererV2):
-            symbols = OrderedDict()
-            for cat in renderer.categories():
-                symbols[cat.value()] = cat.symbol().clone()
-            functionType = "categorical"
-            prop = renderer.classAttribute()
-        elif isinstance(renderer, QgsGraduatedSymbolRendererV2):
-            symbols = OrderedDict()
-            for ran in renderer.ranges():
-                symbols[ran.lowerValue()] = ran.symbol().clone()
-            functionType = "interval"
-            prop = renderer.classAttribute()
-        else:
-            QgsMessageLog.logMessage("Warning: unsupported renderer:" + renderer.__class__.__name__, level=QgsMessageLog.WARNING)
+    if qgisLayer.type() == qgisLayer.VectorLayer:
+        try:
+            renderer = qgisLayer.rendererV2()
+            if isinstance(renderer, QgsSingleSymbolRendererV2):
+                symbols = renderer.symbol().clone()
+                functionType = None
+                prop = None
+            elif isinstance(renderer, QgsCategorizedSymbolRendererV2):
+                symbols = OrderedDict()
+                for cat in renderer.categories():
+                    symbols[cat.value()] = cat.symbol().clone()
+                functionType = "categorical"
+                prop = renderer.classAttribute()
+            elif isinstance(renderer, QgsGraduatedSymbolRendererV2):
+                symbols = OrderedDict()
+                for ran in renderer.ranges():
+                    symbols[ran.lowerValue()] = ran.symbol().clone()
+                functionType = "interval"
+                prop = renderer.classAttribute()
+            else:
+                QgsMessageLog.logMessage("Warning: unsupported renderer:" + renderer.__class__.__name__, level=QgsMessageLog.WARNING)
+                return {}, []
+    
+            sprites, layers = _convertSymbologyForLayer(qgisLayer, symbols, functionType, prop)
+            for i, layer in enumerate(layers):
+                layer["id"] = "%s:%i" % (safeName(qgisLayer.name()), i)
+                layer["source"] = safeName(qgisLayer.name())
+                if str(qgisLayer.customProperty("labeling/scaleVisibility")).lower() == "true":
+                    mapboxLayer["minzoom"]  = _toZoomLevel(float(qgisLayer.customProperty("labeling/scaleMin")))
+                    mapboxLayer["maxzoom"]  = _toZoomLevel(float(qgisLayer.customProperty("labeling/scaleMax")))
+                allLayers.append(layer)
+    
+            allSprites.update(sprites)
+    
+        except Exception, e:
+            import traceback
+            QgsMessageLog.logMessage("ERROR: " + traceback.format_exc(), level=QgsMessageLog.CRITICAL)
             return {}, []
-
-        sprites, layers = _convertSymbologyForLayer(qgisLayer, symbols, functionType, prop)
-        for i, layer in enumerate(layers):
-            layer["id"] = "%s:%i" % (safeName(qgisLayer.name()), i)
-            layer["source"] = safeName(qgisLayer.name())
-            if str(qgisLayer.customProperty("labeling/scaleVisibility")).lower() == "true":
-                mapboxLayer["minzoom"]  = _toZoomLevel(float(qgisLayer.customProperty("labeling/scaleMin")))
-                mapboxLayer["maxzoom"]  = _toZoomLevel(float(qgisLayer.customProperty("labeling/scaleMax")))
-            allLayers.append(layer)
-
-        allSprites.update(sprites)
-
-    except Exception, e:
-        import traceback
-        QgsMessageLog.logMessage("ERROR: " + traceback.format_exc(), level=QgsMessageLog.CRITICAL)
-        return {}, []
-
-    if str(qgisLayer.customProperty("labeling/enabled")).lower() == "true":
-        allLayers.append(processLabeling(qgisLayer))
+    
+        if str(qgisLayer.customProperty("labeling/enabled")).lower() == "true":
+            allLayers.append(processLabeling(qgisLayer))
+    else:
+        layer  = {}
+        layer["id"] = safeName(qgisLayer.name())
+        layer["type"] = "raster"
+        layer["source"] = safeName(qgisLayer.name())
+        layer["paint"] = {}
+        
     return allSprites, allLayers
 
 def processLabeling(qgisLayer):

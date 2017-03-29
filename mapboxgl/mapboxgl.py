@@ -726,9 +726,9 @@ def setLayerSymbologyFromMapboxStyle(layer, style, sprites, add):
                                 layer.rendererV2().updateCategorySymbol(idx, symbol)
                     else:
                         if fillPattern is None:
-                            symbolLayer = _fillSymbol(color, outlineColor, translate, opacity)
+                            symbol = _fillSymbol(color, outlineColor, translate, opacity)
                         else:
-                            symbolLayer = _svgFillSymbol(outlineColor, fillPattern, sprites, opacity)
+                            symbol = _svgFillSymbol(outlineColor, fillPattern, sprites, opacity)
                         categories.append(QgsRendererCategoryV2(value, symbol, str(value)))
                 if not add:
                     renderer = QgsCategorizedSymbolRendererV2(style["paint"]["fill-color"]["property"], categories)
@@ -766,9 +766,9 @@ def setLayerSymbologyFromMapboxStyle(layer, style, sprites, add):
                                 layer.rendererV2().updateRangeSymbol(idx, symbol)
                     else:
                         if fillPattern is None:
-                            symbolLayer = _fillSymbol(color, outlineColor, translate, opacity)
+                            symbol = _fillSymbol(color, outlineColor, translate, opacity)
                         else:
-                            symbolLayer = _svgFillSymbol(outlineColor, fillPattern, sprites, opacity)
+                            symbol = _svgFillSymbol(outlineColor, fillPattern, sprites, opacity)
                         ranges.append(QgsRendererRangeV2(minValue, maxValue, symbol, rangeName))
                 if not add:
                     renderer = QgsGraduatedSymbolRendererV2(style["paint"]["fill-color"]["property"], ranges)

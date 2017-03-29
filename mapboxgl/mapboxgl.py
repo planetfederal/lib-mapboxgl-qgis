@@ -36,7 +36,7 @@ def toMapbox(qgislayers, folder, includeApp = False):
         "zoom": zoom
     }
     if sprites:
-        obj["sprite"] = "./sprites"
+        obj["sprite"] = "spriteSheet"
     with open(os.path.join(folder, "mapbox.json"), 'w') as f:
         json.dump(obj, f)
 
@@ -99,11 +99,11 @@ def saveSprites(folder, sprites):
             x += s.width()
         painter.end()
         painter2x.end()
-        img.save(os.path.join(folder, "sprites.png"))
-        img2x.save(os.path.join(folder, "sprites@2x.png"))
-        with open(os.path.join(folder, "sprites.json"), 'w') as f:
+        img.save(os.path.join(folder, "spriteSheet.png"))
+        img2x.save(os.path.join(folder, "spriteSheet@2x.png"))
+        with open(os.path.join(folder, "spriteSheet.json"), 'w') as f:
             json.dump(spritesheet, f)
-        with open(os.path.join(folder, "sprites@2x.json"), 'w') as f:
+        with open(os.path.join(folder, "spriteSheet@2x.json"), 'w') as f:
             json.dump(spritesheet2x, f)
 
 def createSources(folder, layers, precision = 6):

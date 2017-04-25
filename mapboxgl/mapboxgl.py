@@ -12,7 +12,7 @@ from processing.tools import dataobjects
 from distutils.dir_util import copy_tree
 
 def qgisLayers():
-    return [lay for lay in iface.mapCanvas().layers() 
+    return [lay for lay in iface.mapCanvas().layers()
             if lay.type() == lay.VectorLayer or lay.providerType().lower() == "wms"]
 
 def projectToMapbox(folder, includeApp = False):
@@ -24,7 +24,7 @@ def layerToMapbox(layer, folder, includeApp = False):
 def toMapbox(qgislayers, folder, includeApp = False):
     layers, sprites = createLayers(folder, qgislayers)
     extent = iface.mapCanvas().extent()
-    crs = iface.mapCanvas().mapRenderer().destinationCrs()
+    crs = iface.mapCanvas().mapSettings().destinationCrs()
     transform = QgsCoordinateTransform(crs, QgsCoordinateReferenceSystem("EPSG:4326"))
     extent = transform.transform(extent)
     center = [(extent.xMinimum() + extent.xMaximum() ) / 2, (extent.yMinimum() + extent.yMaximum() ) / 2]
@@ -153,7 +153,7 @@ def createSources(folder, layers, precision = 6):
             params = ("bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1"
                     "&request=GetMap&srs=EPSG:3857&width=256&height=256")
             wms = "%s?%sLAYERS=%s&STYLES=%s" % (url, params, layers, styles)
-            sources[layerName] = {"type": "raster", 
+            sources[layerName] = {"type": "raster",
                                   "tiles": [wms],
                                   "tileSize": 256}
 
@@ -424,7 +424,7 @@ def processLayer(qgisLayer):
             else:
                 QgsMessageLog.logMessage("Warning: unsupported renderer:" + renderer.__class__.__name__, level=QgsMessageLog.WARNING)
                 return {}, []
-    
+
             sprites, layers = _convertSymbologyForLayer(qgisLayer, symbols, functionType, prop)
             for i, layer in enumerate(layers):
                 layer["id"] = "%s:%i" % (safeName(qgisLayer.name()), i)
@@ -433,14 +433,14 @@ def processLayer(qgisLayer):
                     mapboxLayer["minzoom"]  = _toZoomLevel(float(qgisLayer.customProperty("labeling/scaleMin")))
                     mapboxLayer["maxzoom"]  = _toZoomLevel(float(qgisLayer.customProperty("labeling/scaleMax")))
                 allLayers.append(layer)
-    
+
             allSprites.update(sprites)
-    
+
         except Exception, e:
             import traceback
             QgsMessageLog.logMessage("ERROR: " + traceback.format_exc(), level=QgsMessageLog.CRITICAL)
             return {}, []
-    
+
         if str(qgisLayer.customProperty("labeling/enabled")).lower() == "true":
             allLayers.append(processLabeling(qgisLayer))
     else:
@@ -449,7 +449,7 @@ def processLayer(qgisLayer):
         layer["type"] = "raster"
         layer["source"] = safeName(qgisLayer.name())
         layer["paint"] = {}
-        
+
     return allSprites, allLayers
 
 def processLabeling(qgisLayer):

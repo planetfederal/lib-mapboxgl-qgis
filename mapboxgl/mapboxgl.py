@@ -19,7 +19,7 @@ def projectToMapbox(folder, includeApp = False):
     return toMapbox(qgisLayers(), folder, includeApp)
 
 def layerToMapbox(layer, folder, includeApp = False):
-    return toMapbox(folder, [layer], includeApp)
+    return toMapbox([layer], folder, includeApp)
 
 def toMapbox(qgislayers, folder, includeApp = False):
     layers, sprites = createLayers(folder, qgislayers)
@@ -382,7 +382,7 @@ def _setPaintProperty(paint, property, obj, func, funcType, attribute):
             d["stops"].append([k, func(v)])
         d["type"] = funcType
         for element in d["stops"]:
-            if element[1] is not None:
+            if element[1] not in [None, NO_ICON]:
                 paint[property] = d
                 break
     else:
